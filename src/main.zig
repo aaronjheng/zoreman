@@ -1,17 +1,46 @@
 const std = @import("std");
 const heap = std.heap;
+const mem = std.mem;
 const os = std.os;
 const posix = std.posix;
 
 const cova = @import("cova");
-const CommandT = cova.Command.Custom(.{});
 const dotenv = @import("dotenv");
 
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
 
+const CommandT = cova.Command.Custom(.{
+    .global_sub_cmds_mandatory = false,
+    .usage_header_fmt =
+    \\Usage:
+    \\{s}{s} 
+    ,
+    .help_header_fmt =
+    \\Help:
+    \\{s}{s}
+    \\
+    \\{s}{s}
+    \\
+    \\
+    ,
+    .subcmds_help_title_fmt = "{s}Commands:\n",
+    .opts_help_title_fmt = "{s}Options:\n",
+    .opt_config = .{
+        .name_sep_fmt = ", ",
+        .global_help_fn = struct {
+            fn help(self: anytype, writer: anytype, _: ?mem.Allocator) !void {
+                const indent_fmt = @TypeOf(self.*).indent_fmt;
+
+                try self.usage(writer);
+                try writer.print("{?s}{s}", .{ indent_fmt, self.description });
+            }
+        }.help,
+    },
+});
 const RootCmd = CommandT{
     .name = "zoreman",
+    .description = "Manage Procfile-based applications",
     .opts = &.{
         .{
             .name = "dotenv_opt",
@@ -43,9 +72,7 @@ const RootCmd = CommandT{
         },
     },
     .sub_cmds = &.{
-        .{
-            .name = "start",
-        },
+        .{ .name = "start", .description = "Start Applications" },
     },
 };
 const OptionT = CommandT.OptionT;
@@ -68,18 +95,21 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    var rootCmd = try RootCmd.init(allocator, .{});
+    var rootCmd = try RootCmd.init(allocator, .{
+        .help_config = .{
+            .add_help_cmds = false,
+        },
+    });
     defer rootCmd.deinit();
 
     var argsIterator = try cova.ArgIteratorGeneric.init(allocator);
     defer argsIterator.deinit();
 
-    const parseArgsResult = cova.parseArgs(&argsIterator, CommandT, rootCmd, std.io.getStdOut().writer(), .{});
-    parseArgsResult catch |err| {
-        switch (err) {
-            error.ExpectedSubCommand, error.UsageHelpCalled => {},
-            else => return err,
-        }
+    cova.parseArgs(&argsIterator, CommandT, rootCmd, std.io.getStdErr().writer(), .{}) catch |err| switch (err) {
+        error.UsageHelpCalled => {
+            return;
+        },
+        else => return err,
     };
 
     const profilePath = try (try rootCmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
@@ -97,4 +127,6 @@ pub fn main() !void {
         supervisor.start() catch {};
         return;
     }
+
+    try rootCmd.help(std.io.getStdErr().writer());
 }
