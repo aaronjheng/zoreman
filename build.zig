@@ -11,8 +11,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // cova
     const cova = b.dependency("cova", .{});
     exe.root_module.addImport("cova", cova.module("cova"));
+
+    // dotenv
+    const dotenv = b.dependency("dotenv", .{});
+    exe.root_module.addImport("dotenv", dotenv.module("dotenv"));
 
     b.installArtifact(exe);
 

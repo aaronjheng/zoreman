@@ -5,6 +5,9 @@
         .cova = .{
             .path = "../cova",
         },
+        .dotenv = .{
+            .path = "../dotenv",
+        },
     },
     .paths = .{
         "build.zig",

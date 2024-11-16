@@ -1,6 +1,6 @@
 # Zoreman
 
-A [foreman](https://ddollar.github.io/foreman/) clone in Zig.
+A [foreman](https://ddollar.github.io/foreman/) clone in Zig. Inspired by [goreman](https://github.com/mattn/goreman).
 
 ## Installation
 
