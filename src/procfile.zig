@@ -28,7 +28,7 @@ pub const Procfile = struct {
     const Self = @This();
 
     allocator: Allocator,
-    procs: []ProcInfo,
+    procs: []*ProcInfo,
 
     pub fn init(allocator: Allocator, filepath: []const u8) !Procfile {
         const cwd = std.fs.cwd();
@@ -36,21 +36,23 @@ pub const Procfile = struct {
         var file = try cwd.openFile(filepath, .{});
         defer file.close();
 
-        var buffered = std.io.bufferedReader(file.reader());
-        var r = buffered.reader();
-
-        var buf: [1024]u8 = undefined;
-        var procs = std.ArrayList(ProcInfo).init(allocator);
+        var procs = std.ArrayList(*ProcInfo).init(allocator);
         errdefer procs.deinit();
 
+        var buffered = std.io.bufferedReader(file.reader());
+        var r = buffered.reader();
+        var buf: [1024]u8 = undefined;
         while (try r.readUntilDelimiterOrEof(&buf, '\n')) |line| {
             const parts = try splitN(u8, allocator, line, ':', 2);
+            defer allocator.free(parts);
 
             if (parts.len != 2) {
                 continue;
             }
 
-            const proc = try ProcInfo.init(allocator, std.mem.trim(u8, parts[0], " "), std.mem.trim(u8, parts[1], " "));
+            const proc = try allocator.create(ProcInfo);
+            proc.* = try ProcInfo.init(allocator, std.mem.trim(u8, parts[0], " "), std.mem.trim(u8, parts[1], " "));
+
             try procs.append(proc);
         }
 
@@ -63,6 +65,7 @@ pub const Procfile = struct {
     pub fn deinit(self: *Self) void {
         for (self.procs) |proc| {
             proc.deinit();
+            self.allocator.destroy(proc);
         }
 
         self.allocator.free(self.procs);
@@ -82,7 +85,8 @@ fn splitN(comptime T: type, allocator: Allocator, s: []const T, delimiter: T, n:
         cnt += 1;
 
         if (cnt == n - 1) {
-            try parts.append(iterator.rest());
+            const rest = iterator.rest();
+            try parts.append(rest);
 
             break;
         }

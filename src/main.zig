@@ -1,5 +1,6 @@
 const std = @import("std");
 const heap = std.heap;
+const log = std.log;
 const mem = std.mem;
 const os = std.os;
 const posix = std.posix;
@@ -7,6 +8,7 @@ const posix = std.posix;
 const cova = @import("cova");
 const dotenv = @import("dotenv");
 
+const logger = std.log.scoped(.zoreman);
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
 
@@ -90,7 +92,11 @@ pub const std_options = .{
 pub fn main() !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
     defer {
-        _ = gpa.deinit();
+        const check = gpa.deinit();
+
+        if (check == .leak) {
+            logger.warn("Memory Leaked", .{});
+        }
     }
 
     const allocator = gpa.allocator();
@@ -124,8 +130,7 @@ pub fn main() !void {
         var supervisor = try Supervisor.init(allocator, procfile);
         defer supervisor.deinit();
 
-        supervisor.start() catch {};
-        return;
+        try supervisor.start();
     }
 
     try rootCmd.help(std.io.getStdErr().writer());
