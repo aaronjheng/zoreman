@@ -3,6 +3,7 @@ const process = std.process;
 const Allocator = std.mem.Allocator;
 
 const Procfile = @import("procfile.zig").Procfile;
+const ProcLogger = @import("log.zig").ProcLogger;
 
 pub const Supervisor = struct {
     const Self = @This();
@@ -21,18 +22,13 @@ pub const Supervisor = struct {
     }
 
     pub fn start(self: *Self) !void {
-        const logFn = struct {
-            pub fn write(src: std.fs.File) !void {
-                var reader = src.reader();
-                var writer = std.io.getStdErr().writer();
-                var buf: [2048]u8 = undefined;
+        const logFn = ProcLogger.write;
 
-                while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-                    _ = try writer.write(line);
-                    try writer.writeByte('\n');
-                }
-            }
-        }.write;
+        var max_proc_name_length: usize = 0;
+        for (self.procfile.procs) |proc| {
+            const proc_name_length = proc.name.len;
+            if (proc_name_length > max_proc_name_length) max_proc_name_length = proc_name_length;
+        }
 
         for (self.procfile.procs) |proc| {
             var child = process.Child.init(&.{ "/bin/sh", "-c", proc.command }, self.allocator);
@@ -41,8 +37,8 @@ pub const Supervisor = struct {
 
             _ = try child.spawn();
 
-            var t1 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{child.stdout.?});
-            var t2 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{child.stderr.?});
+            var t1 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stdout.?, proc.name, max_proc_name_length });
+            var t2 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stderr.?, proc.name, max_proc_name_length });
 
             t1.detach();
             t2.detach();
@@ -57,7 +53,6 @@ pub const Supervisor = struct {
 
     pub fn stop(self: *Self) !void {
         for (self.procs.items) |*proc| {
-            std.debug.print("stop", .{});
             _ = try proc.*.kill();
         }
     }

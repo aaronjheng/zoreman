@@ -50,8 +50,11 @@ pub const Procfile = struct {
                 continue;
             }
 
+            const name = std.mem.trim(u8, parts[0], " ");
+            const command = std.mem.trim(u8, parts[1], " ");
+
             const proc = try allocator.create(ProcInfo);
-            proc.* = try ProcInfo.init(allocator, std.mem.trim(u8, parts[0], " "), std.mem.trim(u8, parts[1], " "));
+            proc.* = try ProcInfo.init(allocator, name, command);
 
             try procs.append(proc);
         }
