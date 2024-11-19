@@ -13,7 +13,17 @@ const logger = log.scoped(.zoreman);
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
 
+pub const std_options: std.Options = .{
+    .log_scope_levels = &.{
+        .{
+            .scope = .cova,
+            .level = .info,
+        },
+    },
+};
+
 const CommandT = cova.Command.Custom(.{
+    .global_vals_mandatory = false,
     .global_sub_cmds_mandatory = false,
     .usage_header_fmt =
     \\Usage:
@@ -75,20 +85,25 @@ const RootCmd = CommandT{
         },
     },
     .sub_cmds = &.{
-        .{ .name = "start", .description = "Start Applications" },
+        .{
+            .name = "start",
+            .description = "Start Applications",
+            .vals = &.{
+                ValueT.ofType(
+                    []const u8,
+                    .{
+                        .name = "process",
+                        .description = "Process(es) to start",
+                        .set_behavior = .Multi,
+                        .max_entries = 3,
+                    },
+                ),
+            },
+        },
     },
 };
 const OptionT = CommandT.OptionT;
 const ValueT = CommandT.ValueT;
-
-pub const std_options: std.Options = .{
-    .log_scope_levels = &.{
-        .{
-            .scope = .cova,
-            .level = .info,
-        },
-    },
-};
 
 var supervisor: Supervisor = undefined;
 
@@ -104,30 +119,37 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    var rootCmd = try RootCmd.init(allocator, .{
+    var root_cmd = try RootCmd.init(allocator, .{
         .help_config = .{
             .add_help_cmds = false,
         },
     });
-    defer rootCmd.deinit();
+    defer root_cmd.deinit();
 
-    var argsIterator = try cova.ArgIteratorGeneric.init(allocator);
-    defer argsIterator.deinit();
+    var args_iter = try cova.ArgIteratorGeneric.init(allocator);
+    defer args_iter.deinit();
 
-    cova.parseArgs(&argsIterator, CommandT, rootCmd, std.io.getStdErr().writer(), .{}) catch |err| switch (err) {
+    cova.parseArgs(&args_iter, CommandT, root_cmd, io.getStdErr().writer(), .{}) catch |err| switch (err) {
         error.UsageHelpCalled => {
             return;
         },
         else => return err,
     };
 
-    const profilePath = try (try rootCmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
-    const dotenvPath = try (try rootCmd.getOpts(.{})).get("dotenv_opt").?.val.getAs([]const u8);
+    const prcfile_path = try (try root_cmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
+    const dotenv_path = try (try root_cmd.getOpts(.{})).get("dotenv_opt").?.val.getAs([]const u8);
 
-    try dotenv.loadFrom(allocator, dotenvPath, .{});
+    try dotenv.loadFrom(allocator, dotenv_path, .{});
 
-    if (rootCmd.matchSubCmd("start")) |_| {
-        var procfile = try Procfile.init(allocator, profilePath);
+    if (root_cmd.matchSubCmd("start")) |start_cmd| {
+        const val = (try start_cmd.getVals(.{})).get("process").?;
+
+        var processes: ?[][]const u8 = null;
+        if (val.isSet()) {
+            processes = try val.getAllAs([]const u8);
+        }
+
+        var procfile = try Procfile.init(allocator, prcfile_path);
         defer procfile.deinit();
 
         supervisor = try Supervisor.init(allocator, procfile);
@@ -150,12 +172,12 @@ pub fn main() !void {
         posix.sigaction(posix.SIG.INT, &terminate, null);
         posix.sigaction(posix.SIG.TERM, &terminate, null);
 
-        supervisor.start() catch |err| {
+        supervisor.start(processes) catch |err| {
             logger.err("Start supervisor failed: {}", .{err});
         };
 
         return;
     }
 
-    try rootCmd.help(io.getStdErr().writer());
+    try root_cmd.help(io.getStdErr().writer());
 }

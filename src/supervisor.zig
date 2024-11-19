@@ -5,6 +5,7 @@ const log = std.log;
 const mem = std.mem;
 const Allocator = mem.Allocator;
 
+const Proc = @import("proc.zig").Proc;
 const Procfile = @import("procfile.zig").Procfile;
 const ProcLogger = @import("log.zig").ProcLogger;
 
@@ -16,26 +17,43 @@ pub const Supervisor = struct {
     procfile: Procfile,
     allocator: Allocator,
 
-    procs: std.ArrayList(std.process.Child),
+    procs: std.ArrayList(*Proc),
+    proc_set: std.StringHashMap(*Proc),
 
     pub fn init(allocator: Allocator, procfile: Procfile) !Supervisor {
         return .{
             .allocator = allocator,
             .procfile = procfile,
-            .procs = std.ArrayList(std.process.Child).init(allocator),
+            .procs = std.ArrayList(*Proc).init(allocator),
+            .proc_set = std.StringHashMap(*Proc).init(allocator),
         };
     }
 
-    pub fn start(self: *Self) !void {
-        const logFn = ProcLogger.write;
+    pub fn start(self: *Self, processes: ?[][]const u8) !void {
+        if (processes) |ps| {
+            for (ps) |p| {
+                if (self.procfile.proc_set.get(p)) |proc| {
+                    try self.procs.append(proc);
+                    try self.proc_set.put(proc.name, proc);
+                } else {
+                    logger.err("Process not found: {s}", .{p});
+                    return error.ProcessNotFound;
+                }
+            }
+        } else {
+            for (self.procfile.procs.items) |proc| {
+                try self.procs.append(proc);
+                try self.proc_set.put(proc.name, proc);
+            }
+        }
 
-        var max_proc_name_length: usize = 0;
-        for (self.procfile.procs) |proc| {
+        var max_proc_name_length: usize = 10;
+        for (self.procs.items) |proc| {
             const proc_name_length = proc.name.len;
             if (proc_name_length > max_proc_name_length) max_proc_name_length = proc_name_length;
         }
 
-        for (self.procfile.procs) |proc| {
+        for (self.procs.items) |proc| {
             var child = process.Child.init(&.{ "/bin/sh", "-c", proc.command }, self.allocator);
             child.stderr_behavior = .Pipe;
             child.stdout_behavior = .Pipe;
@@ -47,24 +65,24 @@ pub const Supervisor = struct {
 
             var t1 = try std.Thread.spawn(
                 .{ .allocator = self.allocator },
-                logFn,
+                ProcLogger.write,
                 .{ child.stdout.?, proc.name, max_proc_name_length },
             );
             var t2 = try std.Thread.spawn(
                 .{ .allocator = self.allocator },
-                logFn,
+                ProcLogger.write,
                 .{ child.stderr.?, proc.name, max_proc_name_length },
             );
 
             t1.detach();
             t2.detach();
 
-            try self.procs.append(child);
+            proc.proc = child;
         }
 
         for (self.procs.items) |*proc| {
-            _ = proc.*.wait() catch |err| {
-                logger.info("Wait Process {d} failed {}", .{ proc.id, err });
+            _ = proc.*.proc.?.wait() catch |err| {
+                logger.info("Wait Process {d} failed {}", .{ proc.*.proc.?.id, err });
             };
         }
 
@@ -72,13 +90,15 @@ pub const Supervisor = struct {
     }
 
     pub fn stop(self: *Self) !void {
-        for (self.procs.items) |*proc| {
-            logger.info("Terminating {d}\n", .{proc.id});
-            try posix.kill(proc.id, posix.SIG.INT);
+        for (self.procs.items) |proc| {
+            const pid = proc.proc.?.id;
+            logger.info("Terminating {s} {d}\n", .{ proc.name, pid });
+            try posix.kill(pid, posix.SIG.INT);
         }
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         self.procs.deinit();
+        self.proc_set.deinit();
     }
 };

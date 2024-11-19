@@ -1,34 +1,14 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-pub const ProcInfo = struct {
-    const Self = @This();
-
-    allocator: Allocator,
-
-    name: []const u8,
-    command: []const u8,
-    proc: ?std.process.Child = null,
-
-    pub fn init(allocator: Allocator, name: []const u8, command: []const u8) !ProcInfo {
-        return ProcInfo{
-            .allocator = allocator,
-            .name = try allocator.dupe(u8, name),
-            .command = try allocator.dupe(u8, command),
-        };
-    }
-
-    pub fn deinit(self: Self) void {
-        self.allocator.free(self.name);
-        self.allocator.free(self.command);
-    }
-};
+const Proc = @import("proc.zig").Proc;
 
 pub const Procfile = struct {
     const Self = @This();
 
     allocator: Allocator,
-    procs: []*ProcInfo,
+    procs: std.ArrayList(*Proc),
+    proc_set: std.StringHashMap(*Proc),
 
     pub fn init(allocator: Allocator, filepath: []const u8) !Procfile {
         const cwd = std.fs.cwd();
@@ -36,8 +16,8 @@ pub const Procfile = struct {
         var file = try cwd.openFile(filepath, .{});
         defer file.close();
 
-        var procs = std.ArrayList(*ProcInfo).init(allocator);
-        errdefer procs.deinit();
+        var procs = std.ArrayList(*Proc).init(allocator);
+        var proc_set = std.StringHashMap(*Proc).init(allocator);
 
         var buffered = std.io.bufferedReader(file.reader());
         var r = buffered.reader();
@@ -53,25 +33,34 @@ pub const Procfile = struct {
             const name = std.mem.trim(u8, parts[0], " ");
             const command = std.mem.trim(u8, parts[1], " ");
 
-            const proc = try allocator.create(ProcInfo);
-            proc.* = try ProcInfo.init(allocator, name, command);
+            const proc = try allocator.create(Proc);
+            proc.* = try Proc.init(allocator, name, command);
 
+            const new_name = try allocator.dupe(u8, name);
             try procs.append(proc);
+            try proc_set.put(new_name, proc);
         }
 
         return .{
             .allocator = allocator,
-            .procs = try procs.toOwnedSlice(),
+            .procs = procs,
+            .proc_set = proc_set,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.procs) |proc| {
+        for (self.procs.items) |proc| {
             proc.deinit();
             self.allocator.destroy(proc);
         }
 
-        self.allocator.free(self.procs);
+        var iter = self.proc_set.iterator();
+        while (iter.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+        }
+
+        self.procs.deinit();
+        self.proc_set.deinit();
     }
 };
 
