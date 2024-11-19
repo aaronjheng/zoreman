@@ -86,6 +86,10 @@ const RootCmd = CommandT{
     },
     .sub_cmds = &.{
         .{
+            .name = "check",
+            .description = "Validate Procfile format",
+        },
+        .{
             .name = "start",
             .description = "Start Applications",
             .vals = &.{
@@ -141,7 +145,27 @@ pub fn main() !void {
 
     try dotenv.loadFrom(allocator, dotenv_path, .{});
 
-    if (root_cmd.matchSubCmd("start")) |start_cmd| {
+    if (root_cmd.matchSubCmd("check")) |_| {
+        var procfile = try Procfile.init(allocator, prcfile_path);
+        defer procfile.deinit();
+
+        var keys = std.ArrayList([]const u8).init(allocator);
+        defer keys.deinit();
+
+        for (procfile.procs.items) |proc| {
+            try keys.append(proc.name);
+        }
+
+        const keySlice = try keys.toOwnedSlice();
+        defer allocator.free(keySlice);
+
+        const keys_str = try mem.join(allocator, ", ", keySlice);
+        defer allocator.free(keys_str);
+
+        logger.info("Valid Procfile detected: {s}, keys: {s}", .{ prcfile_path, keys_str });
+
+        return;
+    } else if (root_cmd.matchSubCmd("start")) |start_cmd| {
         const val = (try start_cmd.getVals(.{})).get("process").?;
 
         var processes: ?[][]const u8 = null;
