@@ -1,9 +1,14 @@
 const std = @import("std");
+const posix = std.posix;
 const process = std.process;
-const Allocator = std.mem.Allocator;
+const log = std.log;
+const mem = std.mem;
+const Allocator = mem.Allocator;
 
 const Procfile = @import("procfile.zig").Procfile;
 const ProcLogger = @import("log.zig").ProcLogger;
+
+const logger = log.scoped(.zoreman);
 
 pub const Supervisor = struct {
     const Self = @This();
@@ -34,8 +39,11 @@ pub const Supervisor = struct {
             var child = process.Child.init(&.{ "/bin/sh", "-c", proc.command }, self.allocator);
             child.stderr_behavior = .Pipe;
             child.stdout_behavior = .Pipe;
+            child.pgid = 0;
 
+            logger.info("Starting {s}", .{proc.name});
             _ = try child.spawn();
+            logger.info("{s} started: {d}", .{ proc.name, child.id });
 
             var t1 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stdout.?, proc.name, max_proc_name_length });
             var t2 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stderr.?, proc.name, max_proc_name_length });
@@ -47,13 +55,18 @@ pub const Supervisor = struct {
         }
 
         for (self.procs.items) |*proc| {
-            _ = try proc.*.wait();
+            _ = proc.*.wait() catch |err| {
+                logger.info("Wait Process {d} failed {}", .{ proc.id, err });
+            };
         }
+
+        logger.info("Supervisor stopped", .{});
     }
 
     pub fn stop(self: *Self) !void {
         for (self.procs.items) |*proc| {
-            _ = try proc.*.kill();
+            logger.info("Terminating {d}\n", .{proc.id});
+            try posix.kill(proc.id, posix.SIG.INT);
         }
     }
 

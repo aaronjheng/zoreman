@@ -1,5 +1,6 @@
 const std = @import("std");
 const heap = std.heap;
+const io = std.io;
 const log = std.log;
 const mem = std.mem;
 const os = std.os;
@@ -8,7 +9,7 @@ const posix = std.posix;
 const cova = @import("cova");
 const dotenv = @import("dotenv");
 
-const logger = std.log.scoped(.zoreman);
+const logger = log.scoped(.zoreman);
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
 
@@ -80,7 +81,7 @@ const RootCmd = CommandT{
 const OptionT = CommandT.OptionT;
 const ValueT = CommandT.ValueT;
 
-pub const std_options = .{
+pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         .{
             .scope = .cova,
@@ -88,6 +89,8 @@ pub const std_options = .{
         },
     },
 };
+
+var supervisor: Supervisor = undefined;
 
 pub fn main() !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
@@ -127,11 +130,32 @@ pub fn main() !void {
         var procfile = try Procfile.init(allocator, profilePath);
         defer procfile.deinit();
 
-        var supervisor = try Supervisor.init(allocator, procfile);
+        supervisor = try Supervisor.init(allocator, procfile);
         defer supervisor.deinit();
 
-        try supervisor.start();
+        const terminate = posix.Sigaction{
+            .handler = .{
+                .handler = struct {
+                    fn handle(_: c_int) callconv(.C) void {
+                        supervisor.stop() catch |err| {
+                            logger.err("Stop supervisor failed: {}", .{err});
+                        };
+                    }
+                }.handle,
+            },
+            .mask = posix.empty_sigset,
+            .flags = 0,
+        };
+
+        posix.sigaction(posix.SIG.INT, &terminate, null);
+        posix.sigaction(posix.SIG.TERM, &terminate, null);
+
+        supervisor.start() catch |err| {
+            logger.err("Start supervisor failed: {}", .{err});
+        };
+
+        return;
     }
 
-    try rootCmd.help(std.io.getStdErr().writer());
+    try rootCmd.help(io.getStdErr().writer());
 }
