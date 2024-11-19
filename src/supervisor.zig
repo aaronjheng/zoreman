@@ -45,8 +45,16 @@ pub const Supervisor = struct {
             _ = try child.spawn();
             logger.info("{s} started: {d}", .{ proc.name, child.id });
 
-            var t1 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stdout.?, proc.name, max_proc_name_length });
-            var t2 = try std.Thread.spawn(.{ .allocator = self.allocator }, logFn, .{ child.stderr.?, proc.name, max_proc_name_length });
+            var t1 = try std.Thread.spawn(
+                .{ .allocator = self.allocator },
+                logFn,
+                .{ child.stdout.?, proc.name, max_proc_name_length },
+            );
+            var t2 = try std.Thread.spawn(
+                .{ .allocator = self.allocator },
+                logFn,
+                .{ child.stderr.?, proc.name, max_proc_name_length },
+            );
 
             t1.detach();
             t2.detach();
