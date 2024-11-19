@@ -9,9 +9,10 @@ const posix = std.posix;
 const cova = @import("cova");
 const dotenv = @import("dotenv");
 
-const logger = log.scoped(.zoreman);
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
+
+const logger = log.scoped(.zoreman);
 
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
@@ -37,6 +38,7 @@ const CommandT = cova.Command.Custom(.{
     \\
     \\
     ,
+    .vals_help_title_fmt = "{s}Values:\n",
     .subcmds_help_title_fmt = "{s}Commands:\n",
     .opts_help_title_fmt = "{s}Options:\n",
     .opt_config = .{
@@ -51,6 +53,8 @@ const CommandT = cova.Command.Custom(.{
         }.help,
     },
 });
+const OptionT = CommandT.OptionT;
+const ValueT = CommandT.ValueT;
 const RootCmd = CommandT{
     .name = "zoreman",
     .description = "Manage Procfile-based applications",
@@ -110,8 +114,6 @@ const RootCmd = CommandT{
         },
     },
 };
-const OptionT = CommandT.OptionT;
-const ValueT = CommandT.ValueT;
 
 var supervisor: Supervisor = undefined;
 
