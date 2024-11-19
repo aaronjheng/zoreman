@@ -104,6 +104,10 @@ const RootCmd = CommandT{
                 ),
             },
         },
+        .{
+            .name = "version",
+            .description = "Print zoreman version",
+        },
     },
 };
 const OptionT = CommandT.OptionT;
@@ -201,7 +205,9 @@ pub fn main() !void {
         };
 
         return;
+    } else if (root_cmd.matchSubCmd("version")) |_| {
+        try io.getStdOut().writer().print("{s}\n", .{"0.1.0-dev"});
+    } else {
+        try root_cmd.help(io.getStdErr().writer());
     }
-
-    try root_cmd.help(io.getStdErr().writer());
 }
