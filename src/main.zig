@@ -146,13 +146,13 @@ pub fn main() !void {
         else => return err,
     };
 
-    const prcfile_path = try (try root_cmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
+    const procfile_path = try (try root_cmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
     const dotenv_path = try (try root_cmd.getOpts(.{})).get("dotenv_opt").?.val.getAs([]const u8);
 
     try dotenv.loadFrom(allocator, dotenv_path, .{});
 
     if (root_cmd.matchSubCmd("check")) |_| {
-        var procfile = try Procfile.init(allocator, prcfile_path);
+        var procfile = try Procfile.init(allocator, procfile_path);
         defer procfile.deinit();
 
         var keys = std.ArrayList([]const u8).init(allocator);
@@ -168,7 +168,7 @@ pub fn main() !void {
         const keys_str = try mem.join(allocator, ", ", key_slice);
         defer allocator.free(keys_str);
 
-        logger.info("Valid Procfile detected: {s}, keys: {s}", .{ prcfile_path, keys_str });
+        logger.info("Valid Procfile detected: {s}, keys: {s}", .{ procfile_path, keys_str });
 
         return;
     } else if (root_cmd.matchSubCmd("start")) |start_cmd| {
@@ -179,7 +179,7 @@ pub fn main() !void {
             processes = try val.getAllAs([]const u8);
         }
 
-        var procfile = try Procfile.init(allocator, prcfile_path);
+        var procfile = try Procfile.init(allocator, procfile_path);
         defer procfile.deinit();
 
         supervisor = try Supervisor.init(allocator, procfile);

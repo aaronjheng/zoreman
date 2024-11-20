@@ -6,4 +6,16 @@ words: []
 ignoreWords:
   - Zoreman
   - cova
+  - procfile
+  - deinit
+  - sigaction
+  - sigset
+  - callconv
+  - anytype
+  - subcmds
+  - procs
+  - comptime
+  - errdefer
+  - pgid
+  - usize
 import: []
