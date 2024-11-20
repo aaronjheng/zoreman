@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const cova = b.dependency("cova", .{});
+    const dotenv = b.dependency("dotenv", .{});
+
     const exe = b.addExecutable(.{
         .name = "zoreman",
         .root_source_file = b.path("src/main.zig"),
@@ -11,12 +14,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // cova
-    const cova = b.dependency("cova", .{});
+    // Dependencies
     exe.root_module.addImport("cova", cova.module("cova"));
-
-    // dotenv
-    const dotenv = b.dependency("dotenv", .{});
     exe.root_module.addImport("dotenv", dotenv.module("dotenv"));
 
     // Step install
