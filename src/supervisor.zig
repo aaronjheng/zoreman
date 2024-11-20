@@ -1,8 +1,9 @@
 const std = @import("std");
-const posix = std.posix;
-const process = std.process;
+const fs = std.fs;
 const log = std.log;
 const mem = std.mem;
+const posix = std.posix;
+const process = std.process;
 const Allocator = mem.Allocator;
 
 const Proc = @import("proc.zig").Proc;
@@ -11,10 +12,17 @@ const ProcLogger = @import("log.zig").ProcLogger;
 
 const logger = log.scoped(.zoreman);
 
+pub const ProcLoggerWrapper = struct {
+    pub fn write(p: *ProcLogger, src: fs.File, name: []const u8, max_proc_name_length: usize) !void {
+        try p.write(src, name, max_proc_name_length);
+    }
+};
+
 pub const Supervisor = struct {
     const Self = @This();
 
     procfile: Procfile,
+    proc_logger: ProcLogger,
     allocator: Allocator,
 
     procs: std.ArrayList(*Proc),
@@ -23,6 +31,7 @@ pub const Supervisor = struct {
     pub fn init(allocator: Allocator, procfile: Procfile) !Supervisor {
         return .{
             .allocator = allocator,
+            .proc_logger = .{},
             .procfile = procfile,
             .procs = std.ArrayList(*Proc).init(allocator),
             .proc_set = std.StringHashMap(*Proc).init(allocator),
@@ -67,13 +76,13 @@ pub const Supervisor = struct {
 
             var t1 = try std.Thread.spawn(
                 .{ .allocator = self.allocator },
-                ProcLogger.write,
-                .{ child.stdout.?, proc.name, max_proc_name_length },
+                ProcLoggerWrapper.write,
+                .{ &self.proc_logger, child.stdout.?, proc.name, max_proc_name_length },
             );
             var t2 = try std.Thread.spawn(
                 .{ .allocator = self.allocator },
-                ProcLogger.write,
-                .{ child.stderr.?, proc.name, max_proc_name_length },
+                ProcLoggerWrapper.write,
+                .{ &self.proc_logger, child.stderr.?, proc.name, max_proc_name_length },
             );
 
             t1.detach();
