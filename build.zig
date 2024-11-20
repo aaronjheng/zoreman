@@ -19,8 +19,10 @@ pub fn build(b: *std.Build) void {
     const dotenv = b.dependency("dotenv", .{});
     exe.root_module.addImport("dotenv", dotenv.module("dotenv"));
 
+    // Step install
     b.installArtifact(exe);
 
+    // Step run
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
