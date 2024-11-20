@@ -5,4 +5,5 @@ dictionaries: []
 words: []
 ignoreWords:
   - Zoreman
+  - cova
 import: []
