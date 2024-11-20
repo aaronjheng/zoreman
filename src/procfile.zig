@@ -20,9 +20,9 @@ pub const Procfile = struct {
         var proc_set = std.StringHashMap(*Proc).init(allocator);
 
         var buffered = std.io.bufferedReader(file.reader());
-        var r = buffered.reader();
+        var reader = buffered.reader();
         var buf: [1024]u8 = undefined;
-        while (try r.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+        while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
             const parts = try splitN(u8, allocator, line, ':', 2);
             defer allocator.free(parts);
 

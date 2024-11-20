@@ -82,8 +82,8 @@ pub const Supervisor = struct {
             proc.process = child;
         }
 
-        for (self.procs.items) |*proc| {
-            _ = proc.*.process.?.wait() catch |err| {
+        for (self.procs.items) |proc| {
+            _ = proc.process.?.wait() catch |err| {
                 logger.info("Wait Process {d} failed {}", .{ proc.*.process.?.id, err });
             };
         }

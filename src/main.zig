@@ -162,10 +162,10 @@ pub fn main() !void {
             try keys.append(proc.name);
         }
 
-        const keySlice = try keys.toOwnedSlice();
-        defer allocator.free(keySlice);
+        const key_slice = try keys.toOwnedSlice();
+        defer allocator.free(key_slice);
 
-        const keys_str = try mem.join(allocator, ", ", keySlice);
+        const keys_str = try mem.join(allocator, ", ", key_slice);
         defer allocator.free(keys_str);
 
         logger.info("Valid Procfile detected: {s}, keys: {s}", .{ prcfile_path, keys_str });
