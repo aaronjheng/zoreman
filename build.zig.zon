@@ -3,10 +3,12 @@
     .version = "0.1.0",
     .dependencies = .{
         .cova = .{
-            .path = "../cova",
+            .url = "https://github.com/00JCIV00/cova/archive/refs/tags/v0.10.1-beta.tar.gz",
+            .hash = "12202782cc66e88f0c15b9acea9d6d1d50dbe941d68b5297927243f6d0377dbb1123",
         },
         .dotenv = .{
-            .path = "../dotenv",
+            .url = "https://github.com/dying-will-bullet/dotenv/archive/de8952cd59d6197dd5e6af85d63954cf47e46e18.tar.gz",
+            .hash = "12204ad345dcd38ce5f3d6ba4b917f5feb60ffaf55d06e854e2cb95115ae0d76a403",
         },
     },
     .paths = .{

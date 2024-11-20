@@ -8,7 +8,7 @@ pub const Proc = struct {
 
     name: []const u8,
     command: []const u8,
-    proc: ?std.process.Child = null,
+    process: ?std.process.Child = null,
 
     pub fn init(allocator: Allocator, name: []const u8, command: []const u8) !Proc {
         return Proc{

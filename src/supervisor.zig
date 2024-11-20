@@ -77,12 +77,12 @@ pub const Supervisor = struct {
             t1.detach();
             t2.detach();
 
-            proc.proc = child;
+            proc.process = child;
         }
 
         for (self.procs.items) |*proc| {
-            _ = proc.*.proc.?.wait() catch |err| {
-                logger.info("Wait Process {d} failed {}", .{ proc.*.proc.?.id, err });
+            _ = proc.*.process.?.wait() catch |err| {
+                logger.info("Wait Process {d} failed {}", .{ proc.*.process.?.id, err });
             };
         }
 
@@ -91,7 +91,7 @@ pub const Supervisor = struct {
 
     pub fn stop(self: *Self) !void {
         for (self.procs.items) |proc| {
-            const pid = proc.proc.?.id;
+            const pid = proc.process.?.id;
             logger.info("Terminating {s} {d}\n", .{ proc.name, pid });
             try posix.kill(pid, posix.SIG.INT);
         }
