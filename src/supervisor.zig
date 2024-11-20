@@ -57,7 +57,7 @@ pub const Supervisor = struct {
             var child = process.Child.init(&.{ "/bin/sh", "-c", proc.command }, self.allocator);
             child.stderr_behavior = .Pipe;
             child.stdout_behavior = .Pipe;
-            child.pgid = 0;
+            // child.pgid = 0;
 
             logger.info("Starting {s}", .{proc.name});
             _ = try child.spawn();

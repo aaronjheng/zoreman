@@ -199,8 +199,8 @@ pub fn main() !void {
             .flags = 0,
         };
 
-        posix.sigaction(posix.SIG.INT, &terminate, null);
-        posix.sigaction(posix.SIG.TERM, &terminate, null);
+        try posix.sigaction(posix.SIG.INT, &terminate, null);
+        try posix.sigaction(posix.SIG.TERM, &terminate, null);
 
         supervisor.start(processes) catch |err| {
             logger.err("Start supervisor failed: {}", .{err});
