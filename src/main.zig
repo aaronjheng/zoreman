@@ -60,28 +60,28 @@ const RootCmd = CommandT{
     .description = "Manage Procfile-based applications",
     .opts = &.{
         .{
-            .name = "dotenv_opt",
+            .name = "dotenv",
             .description = ".env file path",
             .short_name = 'e',
             .long_name = "env",
             .val = ValueT.ofType(
                 []const u8,
                 .{
-                    .name = "dotenv_val",
+                    .name = "dotenv",
                     .description = ".env path value",
                     .default_val = ".env",
                 },
             ),
         },
         .{
-            .name = "procfile_opt",
+            .name = "procfile",
             .description = "Procfile file path",
             .short_name = 'f',
             .long_name = "procfile",
             .val = ValueT.ofType(
                 []const u8,
                 .{
-                    .name = "procfile_val",
+                    .name = "procfile",
                     .description = "Procfile path value",
                     .default_val = "Procfile",
                 },
@@ -146,8 +146,8 @@ pub fn main() !void {
         else => return err,
     };
 
-    const procfile_path = try (try root_cmd.getOpts(.{})).get("procfile_opt").?.val.getAs([]const u8);
-    const dotenv_path = try (try root_cmd.getOpts(.{})).get("dotenv_opt").?.val.getAs([]const u8);
+    const procfile_path = try (try root_cmd.getOpts(.{})).get("procfile").?.val.getAs([]const u8);
+    const dotenv_path = try (try root_cmd.getOpts(.{})).get("dotenv").?.val.getAs([]const u8);
 
     try dotenv.loadFrom(allocator, dotenv_path, .{});
 
