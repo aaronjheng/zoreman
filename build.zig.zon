@@ -7,7 +7,7 @@
             .hash = "12202782cc66e88f0c15b9acea9d6d1d50dbe941d68b5297927243f6d0377dbb1123",
         },
         .dotenv = .{
-            .url = "git+https://github.com/dying-will-bullet/dotenv#9797c27d4c3f1bc9db8ca96c97f697264dc4b9da",
+            .url = "git+https://github.com/dying-will-bullet/dotenv#e7f3d228704dc5ea1e01e8d9fc89ccb5476269f8",
             .hash = "12203a597ada31da19ca18d757bd9fe924e7ac6c1e99c75b701df3ad359dd3a544bc",
         },
     },
