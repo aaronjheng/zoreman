@@ -19,6 +19,7 @@ lint:
   disabled:
     - checkov
   enabled:
+    - cspell@8.17.1
     - actionlint@1.7.4
     - git-diff-check
     - markdownlint@0.43.0
