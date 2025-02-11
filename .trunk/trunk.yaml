@@ -2,7 +2,7 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.22.9
+  version: 1.22.10
 
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
@@ -26,8 +26,8 @@ lint:
     - actionlint@1.7.7
     - git-diff-check
     - markdownlint@0.44.0
-    - prettier@3.4.2
-    - trufflehog@3.88.4
+    - prettier@3.5.0
+    - trufflehog@3.88.5
     - yamllint@1.35.1
 
 actions:
