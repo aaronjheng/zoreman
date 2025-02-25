@@ -22,12 +22,12 @@ lint:
   disabled:
     - checkov
   enabled:
-    - cspell@8.17.3
+    - cspell@8.17.5
     - actionlint@1.7.7
     - git-diff-check
     - markdownlint@0.44.0
-    - prettier@3.5.1
-    - trufflehog@3.88.9
+    - prettier@3.5.2
+    - trufflehog@3.88.12
     - yamllint@1.35.1
 
 actions:
