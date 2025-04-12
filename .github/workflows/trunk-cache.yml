@@ -1,3 +1,4 @@
+name: Trunk Cache
 on:
   push:
     branches: [master]
