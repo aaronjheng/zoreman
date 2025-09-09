@@ -27,7 +27,7 @@ lint:
     - git-diff-check
     - markdownlint@0.45.0
     - prettier@3.6.2
-    - trufflehog@3.90.5
+    - trufflehog@3.90.6
     - yamllint@1.37.1
 
 actions:
