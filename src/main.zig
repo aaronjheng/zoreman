@@ -8,6 +8,7 @@ const posix = std.posix;
 const cova = @import("cova");
 const dotenv = @import("dotenv");
 
+const build_options = @import("build_options");
 const Procfile = @import("procfile.zig").Procfile;
 const Supervisor = @import("supervisor.zig").Supervisor;
 
@@ -218,7 +219,10 @@ pub fn main() !void {
 
         return;
     } else if (root_cmd.matchSubCmd("version")) |_| {
-        try stdout_writer.interface.print("{s}\n", .{"0.1.0-dev"});
+        const stdout = fs.File.stdout();
+        const version_str = try mem.concat(allocator, u8, &.{ build_options.version, "\n" });
+        defer allocator.free(version_str);
+        _ = try stdout.write(version_str);
     } else {
         try root_cmd.help(&stderr_writer.interface);
     }
