@@ -4,6 +4,10 @@ A [foreman](https://ddollar.github.io/foreman/) clone in Zig. Inspired by [gorem
 
 ## Installation
 
+### Requirements
+
+- Zig 0.15 or later
+
 ### From Source
 
 ```shell

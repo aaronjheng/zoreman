@@ -1,19 +1,16 @@
 .{
-    .name = "zoreman",
+    .name = .zoreman,
+    .fingerprint = 0x35df17c05abdfb73,
     .version = "0.1.0",
+    .paths = .{""},
     .dependencies = .{
         .cova = .{
-            .url = "git+https://github.com/00JCIV00/cova#8f12e4825c8a7de769de52b9ba3752ab64547080",
-            .hash = "1220d71bd6c90cd3005451a29884fb819b11339aab0539f1dea119214afd065d598e",
+            .url = "git+https://github.com/00JCIV00/cova.git#a6c0e039f1f3f1cac1b661a19cbd62e08f7c30b9",
+            .hash = "cova-0.10.1-_OE4R2GzBADgtxZ-18SYW3tXUiKfQp6fdshEAPfg-yiq",
         },
         .dotenv = .{
-            .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.2.0.tar.gz",
-            .hash = "12201347c20e8c4cb161f16bba30e51da17c32b89ef887b9b8932d6ed135ee5a6d01",
+            .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.2.2.tar.gz",
+            .hash = "dotenv-0.2.2-ikMfwBB3AAC89NhL0EVbn6mRYA5z4fec8PcNKJ-P8m16",
         },
-    },
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "src",
     },
 }

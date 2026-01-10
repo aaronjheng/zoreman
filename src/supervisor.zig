@@ -33,7 +33,7 @@ pub const Supervisor = struct {
             .allocator = allocator,
             .proc_logger = .{},
             .procfile = procfile,
-            .procs = std.ArrayList(*Proc).init(allocator),
+            .procs = std.ArrayList(*Proc){},
             .proc_set = std.StringHashMap(*Proc).init(allocator),
         };
     }
@@ -42,7 +42,7 @@ pub const Supervisor = struct {
         if (processes) |ps| {
             for (ps) |p| {
                 if (self.procfile.proc_set.get(p)) |proc| {
-                    try self.procs.append(proc);
+                    try self.procs.append(self.allocator, proc);
                     try self.proc_set.put(proc.name, proc);
                 } else {
                     logger.err("Process not found: {s}", .{p});
@@ -51,7 +51,7 @@ pub const Supervisor = struct {
             }
         } else {
             for (self.procfile.procs.items) |proc| {
-                try self.procs.append(proc);
+                try self.procs.append(self.allocator, proc);
                 try self.proc_set.put(proc.name, proc);
             }
         }
@@ -109,7 +109,7 @@ pub const Supervisor = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.procs.deinit();
+        self.procs.deinit(self.allocator);
         self.proc_set.deinit();
     }
 };

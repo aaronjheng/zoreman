@@ -16,14 +16,20 @@ pub const Procfile = struct {
         var file = try cwd.openFile(filepath, .{});
         defer file.close();
 
-        var procs = std.ArrayList(*Proc).init(allocator);
+        var procs = std.ArrayList(*Proc){};
         var proc_set = std.StringHashMap(*Proc).init(allocator);
 
-        var buffered = std.io.bufferedReader(file.reader());
-        var reader = buffered.reader();
-        var buf: [1024]u8 = undefined;
-        while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-            const parts = try splitN(u8, allocator, line, ':', 2);
+        const file_contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        defer allocator.free(file_contents);
+
+        var lines = std.mem.splitScalar(u8, file_contents, '\n');
+        while (lines.next()) |line| {
+            const trimmed_line = std.mem.trim(u8, line, " \r\n");
+            if (trimmed_line.len == 0) {
+                continue;
+            }
+
+            const parts = try splitN(u8, allocator, trimmed_line, ':', 2);
             defer allocator.free(parts);
 
             if (parts.len != 2) {
@@ -37,7 +43,7 @@ pub const Procfile = struct {
             proc.* = try Proc.init(allocator, name, command);
 
             const new_name = try allocator.dupe(u8, name);
-            try procs.append(proc);
+            try procs.append(allocator, proc);
             try proc_set.put(new_name, proc);
         }
 
@@ -59,30 +65,30 @@ pub const Procfile = struct {
             self.allocator.free(entry.key_ptr.*);
         }
 
-        self.procs.deinit();
+        self.procs.deinit(self.allocator);
         self.proc_set.deinit();
     }
 };
 
 fn splitN(comptime T: type, allocator: Allocator, s: []const T, delimiter: T, n: usize) ![][]const T {
-    var parts = std.ArrayList([]const T).init(allocator);
-    errdefer parts.deinit();
+    var parts = std.ArrayList([]const T){};
+    errdefer parts.deinit(allocator);
 
     var iterator = std.mem.splitScalar(T, s, delimiter);
 
     var cnt = @as(usize, 0);
     while (iterator.next()) |part| {
-        try parts.append(part);
+        try parts.append(allocator, part);
 
         cnt += 1;
 
         if (cnt == n - 1) {
             const rest = iterator.rest();
-            try parts.append(rest);
+            try parts.append(allocator, rest);
 
             break;
         }
     }
 
-    return parts.toOwnedSlice();
+    return parts.toOwnedSlice(allocator);
 }
