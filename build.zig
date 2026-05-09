@@ -1,7 +1,7 @@
 const std = @import("std");
 
 // Version - keep in sync with build.zig.zon
-const VERSION = "0.1.0";
+const VERSION = "1.0.0";
 
 pub fn build(b: *std.Build) void {
     // Dependencies

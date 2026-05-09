@@ -1,7 +1,7 @@
 .{
     .name = .zoreman,
     .fingerprint = 0x35df17c05abdfb73,
-    .version = "0.1.0",
+    .version = "1.0.0",
     .paths = .{""},
     .dependencies = .{
         .cova = .{
