@@ -2,8 +2,9 @@ const std = @import("std");
 const heap = std.heap;
 const log = std.log;
 const mem = std.mem;
-const fs = std.fs;
 const posix = std.posix;
+const process = std.process;
+const Io = std.Io;
 
 const cova = @import("cova");
 const dotenv = @import("dotenv");
@@ -15,9 +16,7 @@ const Supervisor = @import("supervisor.zig").Supervisor;
 const logger = log.scoped(.zoreman);
 
 var stdout_buffer: [1024]u8 = undefined;
-var stdout_writer = fs.File.stdout().writer(&stdout_buffer);
 var stderr_buffer: [1024]u8 = undefined;
-var stderr_writer = fs.File.stderr().writer(&stderr_buffer);
 
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{
@@ -122,8 +121,10 @@ const RootCmd = CommandT{
 
 var supervisor: Supervisor = undefined;
 
-pub fn main() !void {
-    var gpa = heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: process.Init) !void {
+    const io = init.io;
+
+    var gpa = heap.DebugAllocator(.{}){};
     defer {
         const check = gpa.deinit();
 
@@ -141,8 +142,10 @@ pub fn main() !void {
     });
     defer root_cmd.deinit();
 
-    var args_iter = try cova.ArgIteratorGeneric.init(allocator);
+    var args_iter = try cova.ArgIteratorGeneric.init(init.minimal.args);
     defer args_iter.deinit();
+
+    var stderr_writer = Io.File.writer(Io.File.stderr(), io, &stderr_buffer);
 
     cova.parseArgs(&args_iter, CommandT, root_cmd, &stderr_writer.interface, .{}) catch |err| switch (err) {
         error.UsageHelpCalled => {
@@ -154,7 +157,10 @@ pub fn main() !void {
     const procfile_path = try (try root_cmd.getOpts(.{})).get("procfile").?.val.getAs([]const u8);
     const dotenv_path = try (try root_cmd.getOpts(.{})).get("dotenv").?.val.getAs([]const u8);
 
-    dotenv.loadFrom(allocator, dotenv_path, .{}) catch |err| {
+    var env_map = process.Environ.Map.init(allocator);
+    defer env_map.deinit();
+
+    dotenv.loadFrom(allocator, io, &env_map, dotenv_path, .{}) catch |err| {
         if (err == error.FileNotFound) {
             // .env file is optional, continue without it
         } else {
@@ -163,10 +169,10 @@ pub fn main() !void {
     };
 
     if (root_cmd.matchSubCmd("check")) |_| {
-        var procfile = try Procfile.init(allocator, procfile_path);
+        var procfile = try Procfile.init(allocator, io, procfile_path);
         defer procfile.deinit();
 
-        var keys = std.ArrayList([]const u8){};
+        var keys = std.ArrayList([]const u8).empty;
         defer keys.deinit(allocator);
 
         for (procfile.procs.items) |proc| {
@@ -190,14 +196,14 @@ pub fn main() !void {
             }
         }
 
-        var procfile = try Procfile.init(allocator, procfile_path);
+        var procfile = try Procfile.init(allocator, io, procfile_path);
         defer procfile.deinit();
 
-        supervisor = try Supervisor.init(allocator, procfile);
+        supervisor = try Supervisor.init(allocator, io, procfile);
         defer supervisor.deinit();
 
         const handle_signal = struct {
-            fn handle(_: i32) callconv(.c) void {
+            fn handle(_: posix.SIG) callconv(.c) void {
                 supervisor.stop() catch |err| {
                     logger.err("Stop supervisor failed: {}", .{err});
                 };
@@ -219,10 +225,11 @@ pub fn main() !void {
 
         return;
     } else if (root_cmd.matchSubCmd("version")) |_| {
-        const stdout = fs.File.stdout();
         const version_str = try mem.concat(allocator, u8, &.{ build_options.version, "\n" });
         defer allocator.free(version_str);
-        _ = try stdout.write(version_str);
+
+        var stdout_writer = Io.File.writer(Io.File.stdout(), io, &stdout_buffer);
+        _ = try stdout_writer.interface.print("{s}", .{version_str});
     } else {
         try root_cmd.help(&stderr_writer.interface);
     }

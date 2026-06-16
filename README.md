@@ -6,7 +6,7 @@ A [foreman](https://ddollar.github.io/foreman/) clone in Zig. Inspired by [gorem
 
 ### Requirements
 
-- Zig 0.15 or later
+- Zig 0.16 or later
 
 ### From Source
 

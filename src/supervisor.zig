@@ -1,10 +1,10 @@
 const std = @import("std");
-const fs = std.fs;
 const log = std.log;
 const mem = std.mem;
 const posix = std.posix;
 const process = std.process;
 const Allocator = mem.Allocator;
+const Io = std.Io;
 
 const Proc = @import("proc.zig").Proc;
 const Procfile = @import("procfile.zig").Procfile;
@@ -13,7 +13,7 @@ const ProcLogger = @import("log.zig").ProcLogger;
 const logger = log.scoped(.zoreman);
 
 pub const ProcLoggerWrapper = struct {
-    pub fn write(p: *ProcLogger, src: fs.File, name: []const u8, max_proc_name_length: usize) !void {
+    pub fn write(p: *ProcLogger, src: Io.File, name: []const u8, max_proc_name_length: usize) !void {
         try p.write(src, name, max_proc_name_length);
     }
 };
@@ -24,17 +24,19 @@ pub const Supervisor = struct {
     procfile: Procfile,
     proc_logger: ProcLogger,
     allocator: Allocator,
+    io: Io,
 
     procs: std.ArrayList(*Proc),
     proc_set: std.StringHashMap(*Proc),
 
-    pub fn init(allocator: Allocator, procfile: Procfile) !Supervisor {
+    pub fn init(allocator: Allocator, io: Io, procfile: Procfile) !Supervisor {
         return .{
             .allocator = allocator,
-            .proc_logger = .{},
+            .proc_logger = .{ .io = io },
             .procfile = procfile,
-            .procs = std.ArrayList(*Proc){},
+            .procs = std.ArrayList(*Proc).empty,
             .proc_set = std.StringHashMap(*Proc).init(allocator),
+            .io = io,
         };
     }
 
@@ -63,16 +65,15 @@ pub const Supervisor = struct {
         }
 
         for (self.procs.items) |proc| {
-            var child = process.Child.init(&.{ "/bin/sh", "-c", proc.command }, self.allocator);
-            child.stderr_behavior = .Pipe;
-            child.stdout_behavior = .Pipe;
-            if (@hasField(process.Child, "pgid")) {
-                child.pgid = 0;
-            }
+            const child = try process.spawn(self.io, .{
+                .argv = &.{ "/bin/sh", "-c", proc.command },
+                .stdout = .pipe,
+                .stderr = .pipe,
+                .pgid = 0,
+            });
 
             logger.info("Starting {s}", .{proc.name});
-            _ = try child.spawn();
-            logger.info("{s} started: {d}", .{ proc.name, child.id });
+            logger.info("{s} started: {?d}", .{ proc.name, child.id });
 
             var t1 = try std.Thread.spawn(
                 .{ .allocator = self.allocator },
@@ -92,8 +93,8 @@ pub const Supervisor = struct {
         }
 
         for (self.procs.items) |proc| {
-            _ = proc.process.?.wait() catch |err| {
-                logger.info("Wait Process {d} failed {}", .{ proc.*.process.?.id, err });
+            _ = proc.process.?.wait(self.io) catch |err| {
+                logger.info("Wait Process {?d} failed {}", .{ proc.*.process.?.id, err });
             };
         }
 
@@ -102,7 +103,7 @@ pub const Supervisor = struct {
 
     pub fn stop(self: *Self) !void {
         for (self.procs.items) |proc| {
-            const pid = proc.process.?.id;
+            const pid = proc.process.?.id.?;
             logger.info("Terminating {s} {d}\n", .{ proc.name, pid });
             try posix.kill(pid, posix.SIG.INT);
         }

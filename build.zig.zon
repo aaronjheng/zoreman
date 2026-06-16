@@ -5,12 +5,12 @@
     .paths = .{""},
     .dependencies = .{
         .cova = .{
-            .url = "git+https://github.com/00JCIV00/cova.git#a6c0e039f1f3f1cac1b661a19cbd62e08f7c30b9",
-            .hash = "cova-0.10.1-_OE4R2GzBADgtxZ-18SYW3tXUiKfQp6fdshEAPfg-yiq",
+            .url = "git+https://github.com/aaronjheng/cova.git#29574f6b94802e0dfa298b16fb817226256eb356",
+            .hash = "cova-0.10.1-_OE4Rxe9BADFRKg2oUBnAjKWa82Vo5Depu89hLH6uuLM",
         },
         .dotenv = .{
-            .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.2.2.tar.gz",
-            .hash = "dotenv-0.2.2-ikMfwBB3AAC89NhL0EVbn6mRYA5z4fec8PcNKJ-P8m16",
+            .url = "git+https://github.com/dying-will-bullet/dotenv.git#f6dff7ce2c39ceaafd00114c7d0674376cd82b87",
+            .hash = "dotenv-0.3.0-hfaNFtm3AACGiIZx5jDPHB4Q1QGs9BEMKH-sq32ZxRXa",
         },
     },
 }

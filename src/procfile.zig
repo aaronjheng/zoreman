@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Io = std.Io;
 
 const Proc = @import("proc.zig").Proc;
 
@@ -10,16 +11,18 @@ pub const Procfile = struct {
     procs: std.ArrayList(*Proc),
     proc_set: std.StringHashMap(*Proc),
 
-    pub fn init(allocator: Allocator, filepath: []const u8) !Procfile {
-        const cwd = std.fs.cwd();
+    pub fn init(allocator: Allocator, io: Io, filepath: []const u8) !Procfile {
+        const cwd = Io.Dir.cwd();
 
-        var file = try cwd.openFile(filepath, .{});
-        defer file.close();
+        var file = try cwd.openFile(io, filepath, .{});
+        defer file.close(io);
 
-        var procs = std.ArrayList(*Proc){};
+        var procs = std.ArrayList(*Proc).empty;
         var proc_set = std.StringHashMap(*Proc).init(allocator);
 
-        const file_contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        const file_stat = try file.stat(io);
+        var reader = Io.File.reader(file, io, &.{});
+        const file_contents = try reader.interface.readAlloc(allocator, file_stat.size);
         defer allocator.free(file_contents);
 
         var lines = std.mem.splitScalar(u8, file_contents, '\n');
@@ -71,7 +74,7 @@ pub const Procfile = struct {
 };
 
 fn splitN(comptime T: type, allocator: Allocator, s: []const T, delimiter: T, n: usize) ![][]const T {
-    var parts = std.ArrayList([]const T){};
+    var parts = std.ArrayList([]const T).empty;
     errdefer parts.deinit(allocator);
 
     var iterator = std.mem.splitScalar(T, s, delimiter);
