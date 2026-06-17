@@ -5,9 +5,6 @@ A [foreman](https://ddollar.github.io/foreman/) clone in Zig. Inspired by
 
 Zoreman manages Procfile-based applications on POSIX systems (macOS and Linux).
 
-> Zoreman is **POSIX/macOS/Linux only**. Windows is not supported and is not
-> a goal of this project.
-
 ## Installation
 
 ### Requirements
