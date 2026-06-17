@@ -1,97 +1,117 @@
 const std = @import("std");
-const Allocator = std.mem.Allocator;
+const mem = std.mem;
+const Allocator = mem.Allocator;
 const Io = std.Io;
 
-const Proc = @import("proc.zig").Proc;
+/// A static Procfile entry: name + command line. Reflects exactly one Procfile
+/// line, as parsed from disk. Runtime state for a running process lives in
+/// `supervisor.zig`.
+pub const Entry = struct {
+    name: []const u8,
+    command: []const u8,
+};
 
+pub const ParseError = error{
+    NoValidEntry,
+    DuplicateProcName,
+    EmptyCommand,
+} || Allocator.Error;
+
+pub const ReadError = ParseError || error{
+    OpenFileFailed,
+    ReadFailed,
+    StreamTooLong,
+};
+
+/// Owns parsed Procfile data. `entries` preserves source order; `set` provides
+/// O(1) name lookup. Both reference strings owned by `arena`.
 pub const Procfile = struct {
-    const Self = @This();
+    arena: std.heap.ArenaAllocator,
+    entries: []Entry,
+    set: std.StringHashMapUnmanaged(usize) = .empty,
 
-    allocator: Allocator,
-    procs: std.ArrayList(*Proc),
-    proc_set: std.StringHashMap(*Proc),
-
-    pub fn init(allocator: Allocator, io: Io, filepath: []const u8) !Procfile {
-        const cwd = Io.Dir.cwd();
-
-        var file = try cwd.openFile(io, filepath, .{});
-        defer file.close(io);
-
-        var procs = std.ArrayList(*Proc).empty;
-        var proc_set = std.StringHashMap(*Proc).init(allocator);
-
-        const file_stat = try file.stat(io);
-        var reader = Io.File.reader(file, io, &.{});
-        const file_contents = try reader.interface.readAlloc(allocator, file_stat.size);
-        defer allocator.free(file_contents);
-
-        var lines = std.mem.splitScalar(u8, file_contents, '\n');
-        while (lines.next()) |line| {
-            const trimmed_line = std.mem.trim(u8, line, " \r\n");
-            if (trimmed_line.len == 0) {
-                continue;
-            }
-
-            const parts = try splitN(u8, allocator, trimmed_line, ':', 2);
-            defer allocator.free(parts);
-
-            if (parts.len != 2) {
-                continue;
-            }
-
-            const name = std.mem.trim(u8, parts[0], " ");
-            const command = std.mem.trim(u8, parts[1], " ");
-
-            const proc = try allocator.create(Proc);
-            proc.* = try Proc.init(allocator, name, command);
-
-            const new_name = try allocator.dupe(u8, name);
-            try procs.append(allocator, proc);
-            try proc_set.put(new_name, proc);
-        }
-
-        return .{
-            .allocator = allocator,
-            .procs = procs,
-            .proc_set = proc_set,
-        };
+    pub fn deinit(self: *Procfile) void {
+        self.arena.deinit();
     }
 
-    pub fn deinit(self: *Self) void {
-        for (self.procs.items) |proc| {
-            proc.deinit();
-            self.allocator.destroy(proc);
-        }
+    /// Lookup an entry by name. Returns null if not found.
+    pub fn find(self: *const Procfile, name: []const u8) ?*const Entry {
+        const idx = self.set.get(name) orelse return null;
+        return &self.entries[idx];
+    }
 
-        var iter = self.proc_set.iterator();
-        while (iter.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-        }
-
-        self.procs.deinit(self.allocator);
-        self.proc_set.deinit();
+    /// Order-preserving sorted copy of entry names. Caller frees.
+    pub fn sortedNames(self: *const Procfile, allocator: Allocator) ![][]const u8 {
+        const names = try allocator.alloc([]const u8, self.entries.len);
+        for (self.entries, 0..) |e, i| names[i] = e.name;
+        std.mem.sort([]const u8, names, {}, struct {
+            fn lt(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.lessThan(u8, a, b);
+            }
+        }.lt);
+        return names;
     }
 };
 
-fn splitN(comptime T: type, allocator: Allocator, s: []const T, delimiter: T, n: usize) ![][]const T {
-    var parts = std.ArrayList([]const T).empty;
-    errdefer parts.deinit(allocator);
+/// Parse a Procfile from raw bytes following goreman semantics:
+/// - skip blank lines
+/// - skip lines whose first non-space char is `#`
+/// - split on the first `:`; lines without `:` are skipped
+/// - trim name and command of surrounding whitespace
+/// - lines with empty name are skipped
+/// - lines with empty command are an error (zoreman tightening over goreman)
+/// - duplicate names are an error
+/// - returns NoValidEntry if no entries result
+pub fn parse(parent_allocator: Allocator, source: []const u8) ParseError!Procfile {
+    var arena = std.heap.ArenaAllocator.init(parent_allocator);
+    errdefer arena.deinit();
+    const allocator = arena.allocator();
 
-    var iterator = std.mem.splitScalar(T, s, delimiter);
+    var entries: std.ArrayList(Entry) = .empty;
+    var set: std.StringHashMapUnmanaged(usize) = .empty;
 
-    var cnt = @as(usize, 0);
-    while (iterator.next()) |part| {
-        try parts.append(allocator, part);
+    var lines = mem.splitScalar(u8, source, '\n');
+    while (lines.next()) |raw_line| {
+        const line = mem.trim(u8, raw_line, " \t\r\n");
+        if (line.len == 0) continue;
+        if (line[0] == '#') continue;
 
-        cnt += 1;
+        const colon = mem.indexOfScalar(u8, line, ':') orelse continue;
+        const name_raw = line[0..colon];
+        const command_raw = line[colon + 1 ..];
+        const name = mem.trim(u8, name_raw, " \t");
+        const command = mem.trim(u8, command_raw, " \t");
+        if (name.len == 0) continue;
+        if (command.len == 0) return error.EmptyCommand;
 
-        if (cnt == n - 1) {
-            const rest = iterator.rest();
-            try parts.append(allocator, rest);
+        if (set.contains(name)) return error.DuplicateProcName;
 
-            break;
-        }
+        const name_dup = try allocator.dupe(u8, name);
+        const command_dup = try allocator.dupe(u8, command);
+
+        try entries.append(allocator, .{ .name = name_dup, .command = command_dup });
+        try set.put(allocator, name_dup, entries.items.len - 1);
     }
 
-    return parts.toOwnedSlice(allocator);
+    if (entries.items.len == 0) return error.NoValidEntry;
+
+    return .{
+        .arena = arena,
+        .entries = try entries.toOwnedSlice(allocator),
+        .set = set,
+    };
+}
+
+/// Read and parse a Procfile from disk.
+pub fn parseFile(allocator: Allocator, io: Io, path: []const u8) !Procfile {
+    const cwd = Io.Dir.cwd();
+    var file = try cwd.openFile(io, path, .{});
+    defer file.close(io);
+
+    var buffer: [4096]u8 = undefined;
+    var reader = file.readerStreaming(io, &buffer);
+    const contents = try reader.interface.allocRemaining(allocator, .unlimited);
+    defer allocator.free(contents);
+
+    return parse(allocator, contents);
 }
