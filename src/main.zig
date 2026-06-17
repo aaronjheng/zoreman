@@ -65,32 +65,18 @@ pub fn main(init: process.Init) !u8 {
     };
     defer parsed.deinit();
 
-    // Informational commands (help, version) need neither .goreman nor a
-    // working basedir; serve them before any project-file access so a stale
-    // .goreman or missing basedir cannot break --help or version output.
+    // Informational commands (help, version) need neither a working basedir
+    // nor a Procfile; serve them before any project-file access so a missing
+    // basedir cannot break --help or version output.
     switch (parsed.intent) {
         .help => return 0,
         .version => return try cmdVersion(io),
         else => {},
     }
 
-    // Apply env-driven defaults, then .goreman, both gated by parsed.set_flags
-    // so they never clobber an explicit CLI value. Strings duped from the
-    // .goreman file are parked in the parse arena so they share the lifetime
-    // of `parsed.config`'s other slices and don't leak.
+    // Apply env-driven defaults, gated by parsed.set_flags so they never
+    // clobber an explicit CLI value.
     config_mod.applyEnv(&parsed.config, &parsed.set_flags, init.environ_map);
-    config_mod.applyGoremanFile(
-        &parsed.config,
-        &parsed.set_flags,
-        gpa,
-        parsed.arena.allocator(),
-        io,
-        ".goreman",
-    ) catch |err| {
-        try stderr.print("zoreman: read .goreman: {}\n", .{err});
-        try stderr.flush();
-        return 1;
-    };
 
     // basedir: chdir before any file access.
     if (parsed.config.basedir) |dir| {

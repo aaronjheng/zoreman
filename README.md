@@ -98,20 +98,6 @@ DATABASE_URL=postgres://localhost/myapp
 RAILS_ENV=development
 ```
 
-### `.goreman`
-
-Optional YAML-ish configuration file in the current directory. Only top-level
-scalar fields are read; everything else is ignored. CLI flags override
-`.goreman` values. Supported fields:
-
-```yaml
-procfile: Procfile
-port: 8555
-basedir: .
-baseport: 5000
-exit_on_error: false
-```
-
 ## Options
 
 | Flag | Default | Description |

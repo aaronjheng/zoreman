@@ -89,7 +89,7 @@ test "procfile: preserves source order in entries" {
 }
 
 // -----------------------------------------------------------------------
-// Config (.goreman + env)
+// Config (env)
 // -----------------------------------------------------------------------
 
 test "config: defaults" {

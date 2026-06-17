@@ -24,7 +24,7 @@ pub const Intent = union(enum) {
 };
 
 /// Result of parsing argv: an intent + config overrides + which flags were
-/// explicitly set on the CLI (so .goreman doesn't get overwritten by defaults).
+/// explicitly set on the CLI.
 pub const ParseResult = struct {
     intent: Intent,
     config: config_mod.Config,
