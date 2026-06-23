@@ -179,10 +179,10 @@ pub const Supervisor = struct {
         }
 
         proc.stdout_thread = try Thread.spawn(.{}, log_mod.runReader, .{
-            &self.sink, self.io, proc.child.?.stdout.?, proc.name, proc.stdout_buffer,
+            &self.sink, self.io, proc.child.?.stdout.?, proc.name, idx, proc.stdout_buffer,
         });
         proc.stderr_thread = try Thread.spawn(.{}, log_mod.runReader, .{
-            &self.sink, self.io, proc.child.?.stderr.?, proc.name, proc.stderr_buffer,
+            &self.sink, self.io, proc.child.?.stderr.?, proc.name, idx, proc.stderr_buffer,
         });
         proc.wait_thread = try Thread.spawn(.{}, waitWorker, .{ self, idx });
 

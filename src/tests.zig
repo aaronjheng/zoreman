@@ -145,6 +145,22 @@ test "config: rpcServerAddress override" {
 }
 
 // -----------------------------------------------------------------------
+// Log coloring
+// -----------------------------------------------------------------------
+
+test "log: colorFor cycles through goreman palette" {
+    try testing.expectEqual(@as(u8, 32), log_mod.colorFor(0));
+    try testing.expectEqual(@as(u8, 36), log_mod.colorFor(1));
+    try testing.expectEqual(@as(u8, 35), log_mod.colorFor(2));
+    try testing.expectEqual(@as(u8, 33), log_mod.colorFor(3));
+    try testing.expectEqual(@as(u8, 34), log_mod.colorFor(4));
+    try testing.expectEqual(@as(u8, 31), log_mod.colorFor(5));
+    // Wraps around for processes beyond the palette size.
+    try testing.expectEqual(@as(u8, 32), log_mod.colorFor(6));
+    try testing.expectEqual(@as(u8, 36), log_mod.colorFor(7));
+}
+
+// -----------------------------------------------------------------------
 // RPC protocol
 // -----------------------------------------------------------------------
 
