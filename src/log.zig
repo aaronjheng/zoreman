@@ -87,7 +87,18 @@ pub fn runReader(
 ) void {
     var reader = Io.File.reader(src, io, reader_buffer);
     while (true) {
-        const maybe_line = reader.interface.takeDelimiter('\n') catch return;
+        const maybe_line = reader.interface.takeDelimiter('\n') catch |err| switch (err) {
+            error.StreamTooLong => {
+                // Line exceeds reader buffer capacity. Output the buffered
+                // portion and continue reading the remainder so subsequent
+                // output is not lost.
+                const chunk = reader.interface.peekGreedy(1) catch return;
+                reader.interface.tossBuffered();
+                sink.writeLine(name, chunk, color_index) catch return;
+                continue;
+            },
+            error.ReadFailed => return,
+        };
         const line = maybe_line orelse return; // null = EOF
         sink.writeLine(name, line, color_index) catch return;
     }

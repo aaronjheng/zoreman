@@ -56,7 +56,11 @@ pub const Server = struct {
 
     fn runLoop(self: *Server) void {
         while (!self.stop_flag.load(.seq_cst)) {
-            const stream = self.server.accept(self.io) catch return;
+            const stream = self.server.accept(self.io) catch |err| {
+                if (self.stop_flag.load(.seq_cst)) return;
+                logger.err("rpc accept: {}", .{err});
+                continue;
+            };
             self.handleConn(stream) catch |err| {
                 logger.err("rpc handle: {}", .{err});
             };

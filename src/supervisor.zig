@@ -51,6 +51,8 @@ pub const Supervisor = struct {
     allocator: Allocator,
     io: Io,
     procs: std.ArrayList(RuntimeProc),
+    /// O(1) name → index lookup, populated in `init`.
+    proc_map: std.StringHashMapUnmanaged(usize) = .empty,
     sink: log_mod.LogSink,
     options: SupervisorOptions,
 
@@ -69,6 +71,9 @@ pub const Supervisor = struct {
     /// zero, so a restart of the last process can complete without the
     /// supervisor shutting down between stop and the replacement spawn.
     restarts_in_flight: usize = 0,
+    /// Tracks all spawned kill-timer threads so they can be joined in
+    /// `deinit` before supervisor memory is freed, preventing use-after-free.
+    kill_timer_threads: std.ArrayList(Thread) = .empty,
 
     pub fn init(
         allocator: Allocator,
@@ -95,8 +100,11 @@ pub const Supervisor = struct {
         }
 
         var max_name: usize = 0;
+        var proc_map: std.StringHashMapUnmanaged(usize) = .empty;
+        errdefer proc_map.deinit(allocator);
         for (procs.items, 0..) |*rp, i| {
             if (rp.name.len > max_name) max_name = rp.name.len;
+            try proc_map.put(allocator, rp.name, i);
             if (options.set_ports) {
                 // Compute in u32 so a large baseport or many entries can't
                 // silently wrap; reject configurations that would overflow
@@ -111,14 +119,18 @@ pub const Supervisor = struct {
             .allocator = allocator,
             .io = io,
             .procs = procs,
+            .proc_map = proc_map,
             .sink = log_mod.LogSink.init(io, max_name, options.logtime),
             .options = options,
         };
     }
 
     pub fn deinit(self: *Supervisor) void {
-        // Caller is expected to call run() and wait for it to return cleanly,
-        // then deinit. Joinable threads should already be done.
+        // Join all kill-timer threads before freeing any supervisor memory
+        // to prevent use-after-free when a timer wakes after deinit.
+        for (self.kill_timer_threads.items) |t| t.join();
+        self.kill_timer_threads.deinit(self.allocator);
+        self.proc_map.deinit(self.allocator);
         for (self.procs.items) |*p| {
             if (p.stdout_buffer.len > 0) self.allocator.free(p.stdout_buffer);
             if (p.stderr_buffer.len > 0) self.allocator.free(p.stderr_buffer);
@@ -127,10 +139,7 @@ pub const Supervisor = struct {
     }
 
     fn findIndexLocked(self: *Supervisor, name: []const u8) ?usize {
-        for (self.procs.items, 0..) |p, i| {
-            if (mem.eql(u8, p.name, name)) return i;
-        }
-        return null;
+        return self.proc_map.get(name);
     }
 
     fn buildEnvForProc(self: *Supervisor, proc: *RuntimeProc) !std.process.Environ.Map {
@@ -276,7 +285,10 @@ pub const Supervisor = struct {
         }
 
         // Join all wait_threads outside the lock.
-        const indices_to_join = try self.allocator.alloc(usize, self.procs.items.len);
+        const indices_to_join = self.allocator.alloc(usize, self.procs.items.len) catch |err| {
+            self.mutex.unlock(self.io);
+            return err;
+        };
         defer self.allocator.free(indices_to_join);
         var n: usize = 0;
         for (self.procs.items, 0..) |*p, j| {
@@ -373,19 +385,21 @@ pub const Supervisor = struct {
         // timer SIGKILL the freshly-spawned replacement.
         const original_pid = proc.child.?.id orelse return;
         self.stopOneLocked(proc, posix.SIG.INT);
-        const timer_args = TimerArgs{ .sup = self, .idx = idx, .pid = original_pid };
-        const t = Thread.spawn(.{}, killTimerThread, .{timer_args}) catch |err| {
-            logger.err("spawn kill-timer: {}", .{err});
-            return;
-        };
-        t.detach();
+        self.spawnKillTimerLocked(idx, original_pid);
     }
 
-    /// RPC: stop all procs.
+    /// RPC: stop all procs. Like `rpcStop`, each stopped proc gets a
+    /// 10-second SIGKILL escalation timer so processes that ignore SIGINT
+    /// do not hang indefinitely.
     pub fn rpcStopAll(self: *Supervisor) !void {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        self.stopAllLocked();
+        for (self.procs.items, 0..) |*p, idx| {
+            if (p.child == null) continue;
+            const original_pid = p.child.?.id orelse continue;
+            self.stopOneLocked(p, posix.SIG.INT);
+            self.spawnKillTimerLocked(idx, original_pid);
+        }
     }
 
     /// RPC: start a single proc by name. Already-running procs are a no-op.
@@ -438,12 +452,30 @@ pub const Supervisor = struct {
     pub fn rpcRestartAll(self: *Supervisor) !void {
         // Snapshot names under lock.
         self.mutex.lockUncancelable(self.io);
-        const names = try self.allocator.alloc([]const u8, self.procs.items.len);
+        const names = self.allocator.alloc([]const u8, self.procs.items.len) catch |err| {
+            self.mutex.unlock(self.io);
+            return err;
+        };
         for (self.procs.items, 0..) |p, i| names[i] = p.name;
         self.mutex.unlock(self.io);
         defer self.allocator.free(names);
 
         for (names) |n| try self.rpcRestart(n);
+    }
+
+    /// Caller must hold `self.mutex`. Spawns a kill-timer thread that
+    /// escalates to SIGKILL after 10 seconds if the child hasn't exited.
+    /// The thread is tracked in `kill_timer_threads` and joined in `deinit`
+    /// to prevent use-after-free.
+    fn spawnKillTimerLocked(self: *Supervisor, idx: usize, pid: posix.pid_t) void {
+        const timer_args = TimerArgs{ .sup = self, .idx = idx, .pid = pid };
+        const t = Thread.spawn(.{}, killTimerThread, .{timer_args}) catch |err| {
+            logger.err("spawn kill-timer: {}", .{err});
+            return;
+        };
+        self.kill_timer_threads.append(self.allocator, t) catch {
+            t.detach();
+        };
     }
 };
 

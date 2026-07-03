@@ -35,19 +35,14 @@ pub fn writeResponse(out: *Io.Writer, resp: Response) !void {
     try out.flush();
 }
 
-/// Decode one Request from a single JSON line. Returns owned slices.
+/// Decode one Request from a single JSON line. Returned slices are
+/// allocated by `allocator`; use an arena for automatic cleanup.
 pub fn parseRequest(allocator: Allocator, line: []const u8) !Request {
-    var parsed = try std.json.parseFromSlice(struct {
+    const result = try std.json.parseFromSliceLeaky(struct {
         cmd: []const u8,
         args: []const []const u8 = &.{},
     }, allocator, line, .{ .allocate = .alloc_always });
-    errdefer parsed.deinit();
-    // Caller owns; we'll dupe into our own arena to keep lifetime clean.
-    const cmd = try allocator.dupe(u8, parsed.value.cmd);
-    const args = try allocator.alloc([]const u8, parsed.value.args.len);
-    for (parsed.value.args, 0..) |a, i| args[i] = try allocator.dupe(u8, a);
-    parsed.deinit();
-    return .{ .cmd = cmd, .args = args };
+    return .{ .cmd = result.cmd, .args = result.args };
 }
 
 /// Encode a Request to writer as a single JSON line.
