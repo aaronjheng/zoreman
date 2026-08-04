@@ -167,7 +167,7 @@ const RootCmd: CommandT = .{
                 ValueT.ofType([]const u8, .{
                     .name = "PROCESS",
                     .description = "Process(es) to start",
-                    .set_behavior = .Multi,
+                    .set_behavior = .multi,
                     .max_entries = 127,
                 }),
             },
@@ -183,7 +183,7 @@ const RootCmd: CommandT = .{
                 ValueT.ofType([]const u8, .{
                     .name = "PROCESS",
                     .description = "Target process(es)",
-                    .set_behavior = .Multi,
+                    .set_behavior = .multi,
                     .max_entries = 127,
                 }),
             },
