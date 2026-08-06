@@ -40,6 +40,13 @@ pub const ParseResult = struct {
 const CommandT = cova.Command.Custom(.{
     .global_vals_mandatory = false,
     .global_sub_cmds_mandatory = false,
+    // cova's inheritable-opts loop spins forever when a positional value
+    // (e.g. `start web`) is parsed under a subcommand: the no-match path
+    // does `continue :inheritOpts` without advancing to the parent command,
+    // so it never reaches value parsing. zoreman's options all live on the
+    // root command and are parsed before the subcommand anyway, so disable
+    // option inheritance to make `start <proc>` parse correctly.
+    .global_allow_inheritable_opts = false,
     .usage_header_fmt =
     \\Usage:
     \\{s}{s} 
