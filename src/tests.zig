@@ -95,7 +95,8 @@ test "procfile: preserves source order in entries" {
 test "config: defaults" {
     const c: config.Config = .{};
     try testing.expectEqualStrings("Procfile", c.procfile);
-    try testing.expectEqualStrings(".env", c.env_file);
+    try testing.expectEqual(@as(usize, 1), c.env_files.len);
+    try testing.expectEqualStrings(".env", c.env_files[0]);
     try testing.expectEqual(@as(u16, 8555), c.port);
     try testing.expectEqual(@as(u16, 5000), c.baseport);
     try testing.expectEqual(true, c.set_ports);

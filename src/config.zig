@@ -8,7 +8,9 @@ const Allocator = mem.Allocator;
 /// by callers (e.g. argv arena).
 pub const Config = struct {
     procfile: []const u8 = "Procfile",
-    env_file: []const u8 = ".env",
+    /// Env files to load, in order. The first definition of a variable
+    /// wins (matches goreman's `--env`). Defaults to `.{".env"}`.
+    env_files: []const []const u8 = &.{".env"},
     port: u16 = 8555,
     basedir: ?[]const u8 = null,
     baseport: u16 = 5000,
@@ -22,7 +24,7 @@ pub const Config = struct {
 /// Tracks whether each field was explicitly set by the user via CLI.
 pub const SetFlags = struct {
     procfile: bool = false,
-    env_file: bool = false,
+    env_files: bool = false,
     port: bool = false,
     basedir: bool = false,
     baseport: bool = false,

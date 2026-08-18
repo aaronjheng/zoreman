@@ -109,7 +109,7 @@ const RootCmd: CommandT = .{
         },
         .{
             .name = "dotenv",
-            .description = ".env file path (default: .env)",
+            .description = "Environment files to load, comma separated (default: .env)",
             .short_name = 'e',
             .long_name = "env",
             .val = ValueT.ofType([]const u8, .{ .name = "PATH", .description = "" }),
@@ -252,8 +252,9 @@ pub fn parse(
         set.procfile = true;
     };
     if (opts.get("dotenv")) |o| if (o.val.isSet()) {
-        cfg.env_file = try o.val.getAs([]const u8);
-        set.env_file = true;
+        const raw = try o.val.getAs([]const u8);
+        cfg.env_files = try splitEnvFiles(alloc, raw);
+        set.env_files = true;
     };
     if (opts.get("port")) |o| if (o.val.isSet()) {
         cfg.port = try o.val.getAs(u16);
@@ -339,5 +340,30 @@ fn multiVal(alloc: Allocator, cmd: *const CommandT, name: []const u8) ![]const [
     // Re-allocate with our arena so lifetime aligns with ParseResult.arena.
     const out = try alloc.alloc([]const u8, all.len);
     for (all, 0..) |s, i| out[i] = s;
+    return out;
+}
+
+/// Split a comma-separated `--env` value into trimmed, non-empty paths,
+/// e.g. `"a.env, b.env ,, c.env"` -> `{ "a.env", "b.env", "c.env" }`. Empty
+/// fields are dropped so `--env a,,b` == `--env a,b`; an entirely empty
+/// value yields an empty list (load no env files). Each entry is duped into
+/// `alloc` so its lifetime tracks `ParseResult.arena` rather than cova's
+/// internal value storage.
+fn splitEnvFiles(alloc: Allocator, raw: []const u8) ![]const []const u8 {
+    var count: usize = 0;
+    var counter = mem.splitScalar(u8, raw, ',');
+    while (counter.next()) |part| {
+        if (mem.trim(u8, part, " \t").len > 0) count += 1;
+    }
+
+    const out = try alloc.alloc([]const u8, count);
+    var i: usize = 0;
+    var it = mem.splitScalar(u8, raw, ',');
+    while (it.next()) |part| {
+        const trimmed = mem.trim(u8, part, " \t");
+        if (trimmed.len == 0) continue;
+        out[i] = try alloc.dupe(u8, trimmed);
+        i += 1;
+    }
     return out;
 }

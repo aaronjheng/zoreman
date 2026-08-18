@@ -87,8 +87,11 @@ worker: bundle exec rake jobs:work
 ### `.env`
 
 Loaded from `<basedir>/.env` (default current directory) and merged into each
-child's environment. Values from `.env` override the inherited environment.
-A missing `.env` file is not an error; a malformed file is.
+child's environment. Pass `--env` (or `-e`) with one or more comma-separated
+paths to load different or additional files, e.g. `--env .env,.env.local`.
+Files are loaded in order and the first definition of a variable wins, so
+later files can only add new variables. Values from `.env` override the
+inherited environment. A missing file is not an error; a malformed file is.
 
 ```env
 DATABASE_URL=postgres://localhost/myapp
@@ -100,7 +103,7 @@ RAILS_ENV=development
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-f`, `--procfile PATH` | `Procfile` | Path to the Procfile |
-| `-e`, `--env PATH` | `.env` | Path to the env file |
+| `-e`, `--env PATH` | `.env` | Env files to load, comma separated |
 | `-p`, `--port PORT` | `8555` | Port the RPC server listens on |
 | `-b`, `--baseport PORT` | `5000` | Base port for the auto-injected `PORT` env var |
 | `--basedir DIR` | _none_ | Change to this directory before reading anything |

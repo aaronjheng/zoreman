@@ -163,17 +163,21 @@ fn cmdStart(
         }
     }
 
-    // Load .env (optional). Stays in scope for the supervisor.
+    // Load env files (optional). Stays in scope for the supervisor. Files are
+    // loaded in order; because dotenv does not override existing keys by
+    // default, the first file to define a variable wins (matches goreman).
     var env_override = std.process.Environ.Map.init(gpa);
     defer env_override.deinit();
-    dotenv.loadFrom(gpa, io, &env_override, parsed.config.env_file, .{}) catch |err| switch (err) {
-        error.FileNotFound => {},
-        else => {
-            try stderr.print("zoreman: parse {s}: {}\n", .{ parsed.config.env_file, err });
-            try stderr.flush();
-            return 1;
-        },
-    };
+    for (parsed.config.env_files) |path| {
+        dotenv.loadFrom(gpa, io, &env_override, path, .{}) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => {
+                try stderr.print("zoreman: parse {s}: {}\n", .{ path, err });
+                try stderr.flush();
+                return 1;
+            },
+        };
+    }
 
     var sup = supervisor_mod.Supervisor.init(gpa, io, &pf, if (procs.len == 0) null else procs, .{
         .set_ports = parsed.config.set_ports,
