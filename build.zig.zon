@@ -5,8 +5,8 @@
     .paths = .{""},
     .dependencies = .{
         .cova = .{
-            .url = "git+https://github.com/00JCIV00/cova.git#62ead80ef63bfa255a31d5e121920576d25ba342",
-            .hash = "cova-0.10.1-_OE4RzPaBAD0JKOMIrEJ8uHfz1_OXM7jpBEBocS_81gw",
+            .url = "git+https://github.com/00JCIV00/cova.git#07fc4e64bd27c250219718ec7db06ca430e7e783",
+            .hash = "cova-0.10.1-_OE4R7nuBAAFQchFF-LgpUkrsnSaUoWSqPgdZTsIT00q",
         },
         .dotenv = .{
             .url = "git+https://github.com/dying-will-bullet/dotenv.git#f6dff7ce2c39ceaafd00114c7d0674376cd82b87",
