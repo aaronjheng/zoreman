@@ -21,6 +21,8 @@ pub const Intent = union(enum) {
     run: struct { command: []const u8, args: []const []const u8 },
     /// `zoreman export FORMAT LOCATION`.
     @"export": struct { format: []const u8, location: []const u8 },
+    /// `zoreman completion SHELL`.
+    completion: []const u8,
 };
 
 /// Result of parsing argv: an intent + config overrides + which flags were
@@ -204,6 +206,16 @@ const RootCmd: CommandT = .{
             },
         },
         .{ .name = "version", .description = "Print zoreman version" },
+        // Hidden: emits a shell completion script that calls back into the
+        // hidden `__complete` protocol handled in main.zig (see completion.zig).
+        .{
+            .name = "completion",
+            .description = "Generate a shell completion script (bash, fish, zsh)",
+            .hidden = true,
+            .vals = &.{
+                ValueT.ofType([]const u8, .{ .name = "SHELL", .description = "bash, fish, or zsh" }),
+            },
+        },
     },
 };
 
@@ -308,6 +320,10 @@ pub fn parse(
             const format = singleVal(sub, "FORMAT") orelse return error.MissingExportFormat;
             const location = singleVal(sub, "LOCATION") orelse return error.MissingExportLocation;
             break :blk .{ .@"export" = .{ .format = format, .location = location } };
+        }
+        if (root_cmd.matchSubCmd("completion")) |sub| {
+            const shell = singleVal(sub, "SHELL") orelse return error.MissingCompletionShell;
+            break :blk .{ .completion = shell };
         }
         // No subcommand given: render the root help ourselves (cova only
         // prints help via `--help`/`help`/`usage`, not on bare invocation)

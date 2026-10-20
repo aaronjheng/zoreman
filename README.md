@@ -69,6 +69,37 @@ list
 status
 ```
 
+## Shell completion
+
+zoreman can generate completion scripts for bash, zsh, and fish:
+
+```sh
+zoreman completion bash > ~/.local/share/bash-completion/completions/zoreman
+zoreman completion zsh  > ~/.zfunc/_zoreman
+zoreman completion fish > ~/.config/fish/completions/zoreman.fish
+```
+
+- **bash**: loaded on the next shell start (or `source <(zoreman completion bash)` once).
+- **zsh**: put the file in a directory on your `fpath` (e.g. `~/.zfunc`) and make
+  sure `fpath=(~/.zfunc $fpath)` plus `autoload -Uz compinit && compinit` run in
+  `~/.zshrc` before anything else calls `compinit`.
+- **fish**: picked up automatically on the next shell start.
+
+Completions are dynamic: process names are read from the Procfile, honoring
+`-f/--procfile` and `--basedir` typed earlier on the same line. With a Procfile
+defining `web` and `worker`:
+
+```sh
+zoreman start <TAB>        # db web worker
+zoreman start we<TAB>      # web worker
+zoreman run stop we<TAB>   # web
+zoreman run <TAB>          # list restart restart-all start status stop stop-all
+```
+
+Names already typed on the line are not offered again. When the cursor sits in
+a file-position slot (`-f`, `--env`, `--basedir` values, or the `export`
+LOCATION), the shells fall back to filename completion.
+
 ## Files
 
 ### Procfile

@@ -10,6 +10,7 @@ const dotenv = @import("dotenv");
 const build_options = @import("build_options");
 
 const cli = @import("cli.zig");
+const completion_mod = @import("completion.zig");
 const config_mod = @import("config.zig");
 const procfile_mod = @import("procfile.zig");
 const supervisor_mod = @import("supervisor.zig");
@@ -58,6 +59,17 @@ pub fn main(init: process.Init) !u8 {
     // CLI parse.
     const argv_slice = try init.minimal.args.toSlice(arena.allocator());
 
+    // Shell completion protocol (`zoreman __complete ...`), served by the
+    // generated completion scripts. Handled before cova parsing: the shell
+    // passes a partially typed command line that need not parse (e.g. a
+    // half-typed flag like `--pro`), so the words are scanned by hand in
+    // completion.zig instead.
+    if (argv_slice.len >= 2 and mem.eql(u8, argv_slice[1], "__complete")) {
+        var stdout_buf: [4096]u8 = undefined;
+        var stdout_w = Io.File.writer(Io.File.stdout(), io, &stdout_buf);
+        return try cmdComplete(arena.allocator(), io, argv_slice[2..], &stdout_w.interface);
+    }
+
     var parsed = cli.parse(gpa, argv_slice, stderr) catch |err| {
         try stderr.print("zoreman: {s}\n", .{cliErrorMsg(err)});
         try stderr.flush();
@@ -95,6 +107,7 @@ pub fn main(init: process.Init) !u8 {
         .start => |procs| try cmdStart(gpa, io, init.environ_map, &parsed, procs, stderr),
         .run => |r| try cmdRun(gpa, io, init.environ_map, &parsed, r.command, r.args, stderr),
         .@"export" => |e| try cmdExport(gpa, io, &parsed, e.format, e.location, stderr),
+        .completion => |shell| try cmdCompletion(io, shell, stderr),
     };
 }
 
@@ -103,6 +116,7 @@ fn cliErrorMsg(err: anyerror) []const u8 {
         error.MissingRunCommand => "run requires a command",
         error.MissingExportFormat => "export requires a format",
         error.MissingExportLocation => "export requires a location",
+        error.MissingCompletionShell => "completion requires a shell (bash, fish, or zsh)",
         else => @errorName(err),
     };
 }
@@ -265,6 +279,36 @@ fn cmdRun(
         try stderr.flush();
         return 1;
     };
+    return 0;
+}
+
+/// `zoreman completion SHELL`: print the embedded completion script.
+fn cmdCompletion(io: Io, shell: []const u8, stderr: *Io.Writer) !u8 {
+    const s = completion_mod.Shell.fromString(shell) orelse {
+        try stderr.print("zoreman: unknown shell: {s} (expected bash, fish, or zsh)\n", .{shell});
+        try stderr.flush();
+        return 1;
+    };
+    var buf: [4096]u8 = undefined;
+    var w = Io.File.writer(Io.File.stdout(), io, &buf);
+    try w.interface.writeAll(s.script());
+    try w.interface.flush();
+    return 0;
+}
+
+/// `zoreman __complete WORDS...`: the completion-script protocol. Each argv
+/// item is one word of the partially typed line, with the word under the
+/// cursor last (possibly empty). Candidates print one per line; errors are
+/// swallowed so completion degrades silently.
+fn cmdComplete(alloc: Allocator, io: Io, words: []const [:0]const u8, out: *Io.Writer) !u8 {
+    const conv = try alloc.alloc([]const u8, words.len);
+    for (words, 0..) |w, i| conv[i] = w;
+
+    const candidates = completion_mod.complete(alloc, io, conv) catch &.{};
+    for (candidates) |c| {
+        try out.print("{s}\n", .{c});
+    }
+    try out.flush();
     return 0;
 }
 

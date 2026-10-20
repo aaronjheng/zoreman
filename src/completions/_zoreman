@@ -1,0 +1,38 @@
+#compdef zoreman
+
+# zsh completion for zoreman
+#
+# Install (pick one):
+#   mkdir -p ~/.zfunc && zoreman completion zsh > ~/.zfunc/_zoreman
+#     then in ~/.zshrc, BEFORE any compinit call:
+#       fpath=(~/.zfunc $fpath)
+#       autoload -Uz compinit && compinit
+#   or simply: source <(zoreman completion zsh)
+#
+# Candidates are computed by `zoreman __complete`, which reads the Procfile
+# (honoring -f/--procfile and --basedir typed earlier on the line).
+
+_zoreman() {
+    local cur="${words[CURRENT]}"
+    local -a args
+    args=()
+    (( CURRENT > 2 )) && args=("${(@)words[2,CURRENT-1]}")
+
+    local -a candidates
+    candidates=(${(f)"$(command zoreman __complete "${args[@]}" "$cur" 2>/dev/null)"})
+
+    if (( ${#candidates} )); then
+        compadd -a candidates
+    else
+        # No candidates (e.g. the value of -f, --env or --basedir, or a
+        # LOCATION): fall back to filename completion.
+        _files
+    fi
+}
+
+# Works both as an autoloaded #compdef file and when sourced manually.
+if [ "$funcstack[1]" = "_zoreman" ]; then
+    _zoreman "$@"
+else
+    compdef _zoreman zoreman
+fi

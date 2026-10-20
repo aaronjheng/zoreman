@@ -11,6 +11,7 @@ const cli = @import("cli.zig");
 const log_mod = @import("log.zig");
 const supervisor = @import("supervisor.zig");
 const rpc_proto = @import("rpc_proto.zig");
+const completion = @import("completion.zig");
 
 // -----------------------------------------------------------------------
 // Procfile parser
@@ -182,4 +183,148 @@ test "rpc_proto: parseResponse" {
     defer parsed.deinit();
     try testing.expectEqual(true, parsed.value.ok);
     try testing.expectEqualStrings("web\n", parsed.value.out);
+}
+
+// -----------------------------------------------------------------------
+// Shell completion (word-position logic; names injected, no filesystem)
+// -----------------------------------------------------------------------
+
+const proc_names = [_][]const u8{ "db", "web", "worker" };
+
+fn expectCandidates(expected: []const []const u8, actual: []const []const u8) !void {
+    try testing.expectEqual(expected.len, actual.len);
+    for (expected, actual) |e, a| try testing.expectEqualStrings(e, a);
+}
+
+fn completeWords(words: []const []const u8, names: ?[]const []const u8) ![]const []const u8 {
+    return completion.completeWithNames(testing.allocator, words, names);
+}
+
+test "completion: empty line offers root subcommands" {
+    const got = try completeWords(&.{}, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{ "check", "completion", "export", "help", "run", "start", "version" }, got);
+}
+
+test "completion: prefix filters subcommands" {
+    const got = try completeWords(&.{"st"}, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"start"}, got);
+}
+
+test "completion: dash partial offers long options" {
+    const got = try completeWords(&.{"--pro"}, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"--procfile"}, got);
+}
+
+test "completion: start position offers proc names" {
+    const got = try completeWords(&.{ "start", "w" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{ "web", "worker" }, got);
+}
+
+test "completion: start excludes already-typed names" {
+    const got = try completeWords(&.{ "start", "web", "w" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"worker"}, got);
+}
+
+test "completion: unreadable procfile offers no names" {
+    const got = try completeWords(&.{ "start", "" }, null);
+    defer testing.allocator.free(got);
+    try testing.expectEqual(@as(usize, 0), got.len);
+}
+
+test "completion: run command position offers run commands" {
+    const got = try completeWords(&.{ "run", "" }, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(
+        &.{ "list", "restart", "restart-all", "start", "status", "stop", "stop-all" },
+        got,
+    );
+}
+
+test "completion: run proc commands offer proc names" {
+    const got = try completeWords(&.{ "run", "stop", "we" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"web"}, got);
+
+    const got2 = try completeWords(&.{ "run", "restart", "web", "w" }, &proc_names);
+    defer testing.allocator.free(got2);
+    try expectCandidates(&.{"worker"}, got2);
+}
+
+test "completion: run list takes no further args" {
+    const got = try completeWords(&.{ "run", "list", "" }, null);
+    defer testing.allocator.free(got);
+    try testing.expectEqual(@as(usize, 0), got.len);
+}
+
+test "completion: unknown run command offers nothing" {
+    const got = try completeWords(&.{ "run", "bogus", "" }, &proc_names);
+    defer testing.allocator.free(got);
+    try testing.expectEqual(@as(usize, 0), got.len);
+}
+
+test "completion: export completes format only" {
+    const got = try completeWords(&.{ "export", "u" }, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"upstart"}, got);
+
+    const got2 = try completeWords(&.{ "export", "upstart", "" }, null);
+    defer testing.allocator.free(got2);
+    try testing.expectEqual(@as(usize, 0), got2.len);
+}
+
+test "completion: completion offers shell names" {
+    const got = try completeWords(&.{ "completion", "z" }, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"zsh"}, got);
+}
+
+test "completion: help completes subcommands" {
+    const got = try completeWords(&.{ "help", "st" }, null);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{"start"}, got);
+}
+
+test "completion: option-value position offers nothing" {
+    // Cursor right after -f/--env/--basedir/--procfile or a trailing `=`:
+    // shells fall back to filename completion.
+    for ([_][]const []const u8{
+        &.{ "-f", "" },
+        &.{ "--procfile", "" },
+        &.{ "--procfile=", "" },
+        &.{ "--basedir", "" },
+        &.{ "-e", "" },
+        &.{ "-p", "" },
+    }) |words| {
+        const got = try completeWords(words, &proc_names);
+        defer testing.allocator.free(got);
+        try testing.expectEqual(@as(usize, 0), got.len);
+    }
+}
+
+test "completion: bool/unknown short opts consume no value" {
+    // -h is a cova-added toggle: the next word is still the subcommand.
+    const got = try completeWords(&.{ "-h", "start", "w" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{ "web", "worker" }, got);
+}
+
+test "completion: dash separator forces positionals" {
+    const got = try completeWords(&.{ "--", "start", "w" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&.{ "web", "worker" }, got);
+}
+
+test "completion: abbreviated long option captures procfile" {
+    // cova accepts `--proc PATH` as an abbreviation of `--procfile PATH`.
+    // completeWithNames injects names, so assert indirectly: the value `x`
+    // must be consumed as the option value, leaving `start` as the
+    // subcommand (proc names offered) rather than becoming one itself.
+    const got = try completeWords(&.{ "--proc", "x", "start", "" }, &proc_names);
+    defer testing.allocator.free(got);
+    try expectCandidates(&proc_names, got);
 }
