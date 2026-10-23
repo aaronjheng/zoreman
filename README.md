@@ -9,7 +9,7 @@ Zoreman manages Procfile-based applications on POSIX systems (macOS and Linux).
 
 ### Requirements
 
-- Zig 0.16 or later
+- Zig 0.17 or later
 
 ### From source
 

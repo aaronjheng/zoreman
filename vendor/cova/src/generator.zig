@@ -1,0 +1,121 @@
+//! Meta Doc Generation for Cova-based programs
+//! This is meant to be built and run as a step in `build.zig`.
+
+// Standard library
+const std = @import("std");
+const log = std.log.scoped(.cova_gen);
+const mem = std.mem;
+const meta = std.meta;
+const proc = std.process;
+// The Cova library is needed for the `generate` module.
+const cova = @import("cova");
+const generate = cova.generate;
+const utils = cova.utils;
+
+/// This is a reference module for the program being built. Typically this is the main `.zig` file
+/// in a project that has both the `main()` function and `setup_cmd` Command.
+const program = @import("program");
+/// This is a reference to the Build Options passed in from `build.zig`.
+const md_config = @import("md_config_opts");
+/// Help Docs Config
+const help_docs_config = optsToConf(generate.HelpDocsConfig, @import("help_docs_config"));
+/// Tab Completion Config
+const tab_complete_config = optsToConf(generate.TabCompletionConfig, @import("tab_complete_config"));
+/// Argument Template Config
+const arg_template_config = optsToConf(generate.ArgTemplateConfig, @import("arg_template_config"));
+
+const meta_info: []const []const u8 = &.{
+    "version",
+    "ver_date",
+    "name",
+    "description",
+    "author",
+    "copyright",
+};
+/// Translate Build Options to Meta Doc Generation Configs.
+///TODO Refactor this once Build Options support Types.
+fn optsToConf(comptime ConfigT: type, comptime conf_opts: anytype) ?ConfigT {
+    if (!conf_opts.provided) //
+        return null;
+    var conf = ConfigT{};
+    const conf_struct = @typeInfo(ConfigT).@"struct";
+    inline for (conf_struct.field_names, 0..) |field_name, i| {
+        if (mem.eql(u8, field_name, "provided")) //
+            continue;
+        const field_type = conf_struct.field_types[i];
+        @field(conf, field_name) = @field(conf_opts, field_name);
+        if ((@typeInfo(field_type) == .optional and
+            @field(conf, field_name) != null) or
+            utils.indexOfEql([]const u8, meta_info, field_name) == null) continue;
+        @field(conf, field_name) = @field(md_config, field_name);
+    }
+    return conf;
+}
+
+pub fn main(init: proc.Init) !void {
+    const doc_kinds: []const generate.MetaDocConfig.MetaDocKind = comptime docKinds: {
+        var kinds: [md_config.kinds.len]generate.MetaDocConfig.MetaDocKind = undefined;
+        for (md_config.kinds, kinds[0..]) |md_kind, *kind| //
+            kind.* = @fromBackingInt(@intCast(md_kind));
+        if (kinds[0] != .all) {
+            const kinds_out = kinds;
+            break :docKinds kinds_out[0..];
+        }
+        const mdk_info = @typeInfo(generate.MetaDocConfig.MetaDocKind);
+        var kinds_list: [mdk_info.field_names[1..].len]generate.MetaDocConfig.MetaDocKind = undefined;
+        for (mdk_info.field_names[1..], kinds_list[0..]) |field_name, *kind| //
+            kind.* = @fromBackingInt(@intCast(@enumFromStr(generate.MetaDocConfig.MetaDocKind, field_name)));
+        const kinds_out = kinds_list;
+        break :docKinds kinds_out[0..];
+    };
+
+    const cmd_type_name = @field(program, md_config.cmd_type_name);
+    const setup_cmd_name = @field(program, md_config.setup_cmd_name);
+
+    log.info("\nStarting Meta Doc Generation...", .{});
+    inline for (doc_kinds[0..]) |kind| {
+        switch (kind) {
+            .manpages, .markdown => |help_doc| {
+                const hd_config = help_docs_config orelse {
+                    log.warn("Missing Help Doc Configuration! Skipping.", .{});
+                    continue;
+                };
+                try generate.createHelpDoc(
+                    init.io,
+                    cmd_type_name,
+                    setup_cmd_name,
+                    hd_config,
+                    meta.stringToEnum(generate.HelpDocsConfig.DocKind, @tagName(help_doc)).?,
+                );
+            },
+            .bash, .zsh, .ps1 => |shell| {
+                const tc_config = tab_complete_config orelse {
+                    log.warn("Missing Tab Completion Configuration! Skipping.", .{});
+                    continue;
+                };
+                try generate.createTabCompletion(
+                    init.io,
+                    cmd_type_name,
+                    setup_cmd_name,
+                    tc_config,
+                    meta.stringToEnum(generate.TabCompletionConfig.ShellKind, @tagName(shell)).?,
+                );
+            },
+            .json, .kdl => |template| {
+                const at_config = arg_template_config orelse {
+                    log.warn("Missing Argument Template Configuration! Skipping.", .{});
+                    continue;
+                };
+                try generate.createArgTemplate(
+                    init.io,
+                    cmd_type_name,
+                    setup_cmd_name,
+                    at_config,
+                    meta.stringToEnum(generate.ArgTemplateConfig.TemplateKind, @tagName(template)).?,
+                );
+            },
+            .all => {},
+        }
+    }
+    log.info("Finished Meta Doc Generation!", .{});
+}

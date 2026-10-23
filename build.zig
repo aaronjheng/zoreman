@@ -38,9 +38,9 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run zoreman");
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    // Zig 0.17: `b.args` was removed; `--` args are passed through via the
+    // Run step's passthru mechanism instead of being observable at configure time.
+    run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
 
     // Step test (unit tests)

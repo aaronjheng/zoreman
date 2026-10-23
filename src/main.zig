@@ -92,7 +92,8 @@ pub fn main(init: process.Init) !u8 {
 
     // basedir: chdir before any file access.
     if (parsed.config.basedir) |dir| {
-        const dir_z = try arena.allocator().dupeZ(u8, dir);
+        const dir_z = try arena.allocator().allocSentinel(u8, dir.len, 0);
+        @memcpy(dir_z, dir);
         if (chdir(dir_z) != 0) {
             try stderr.print("zoreman: chdir {s} failed\n", .{dir});
             try stderr.flush();

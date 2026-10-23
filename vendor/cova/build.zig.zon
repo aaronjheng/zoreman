@@ -1,0 +1,12 @@
+.{
+    .name = .cova,
+    .minimum_zig_version = "0.17.0",
+    .fingerprint = 0x88c84524738e1fc,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+    .version = "0.10.1",
+    .dependencies = .{},
+}

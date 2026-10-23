@@ -4,6 +4,22 @@ const ascii = std.ascii;
 const Allocator = mem.Allocator;
 const Io = std.Io;
 
+/// Case-insensitive substring search.
+/// Zig 0.17 removed `std.ascii.indexOfIgnoreCase`; this replaces its use here.
+fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
+    if (needle.len == 0) return 0;
+    if (haystack.len < needle.len) return null;
+    var i: usize = 0;
+    while (i <= haystack.len - needle.len) : (i += 1) {
+        var j: usize = 0;
+        while (j < needle.len) : (j += 1) {
+            if (ascii.toLower(haystack[i + j]) != ascii.toLower(needle[j])) break;
+        }
+        if (j == needle.len) return i;
+    }
+    return null;
+}
+
 const procfile_mod = @import("procfile.zig");
 
 /// Shells with a generated completion script.
@@ -16,8 +32,9 @@ pub const Shell = enum {
     pub const names = [_][]const u8{ "bash", "fish", "zsh" };
 
     pub fn fromString(s: []const u8) ?Shell {
-        inline for (std.meta.fields(Shell)) |f| {
-            if (mem.eql(u8, s, f.name)) return @enumFromInt(f.value);
+        const shell_info = @typeInfo(Shell).@"enum";
+        inline for (shell_info.field_names, 0..) |name, i| {
+            if (mem.eql(u8, s, name)) return @fromBackingInt(@intCast(i));
         }
         return null;
     }
@@ -301,7 +318,7 @@ fn matchesLong(given: []const u8, name: []const u8) bool {
     if (given.len == 0) return false;
     if (ascii.eqlIgnoreCase(given, name)) return true;
     if (!ascii.eqlIgnoreCase(given[0..1], name[0..1])) return false;
-    return ascii.indexOfIgnoreCase(name, given) != null;
+    return indexOfIgnoreCase(name, given) != null;
 }
 
 fn runTakesProcs(cmd: []const u8) bool {
